@@ -1,8 +1,10 @@
 using Microsoft.CodeAnalysis.CSharp;
 using Schedule1ModdingTool.Models;
 using Schedule1ModdingTool.Services.CodeGeneration.Abstractions;
+using Schedule1ModdingTool.Services.CodeGeneration.Item;
 using Schedule1ModdingTool.Services.CodeGeneration.Quest;
 using Schedule1ModdingTool.Services.CodeGeneration.Npc;
+using Schedule1ModdingTool.Services.CodeGeneration.PhoneApp;
 
 namespace Schedule1ModdingTool.Services.CodeGeneration.Orchestration
 {
@@ -15,12 +17,14 @@ namespace Schedule1ModdingTool.Services.CodeGeneration.Orchestration
     {
         private readonly ICodeGenerator<QuestBlueprint> _questGenerator;
         private readonly ICodeGenerator<NpcBlueprint> _npcGenerator;
+        private readonly ICodeGenerator<ItemBlueprint> _itemGenerator;
+        private readonly ICodeGenerator<PhoneAppBlueprint> _phoneAppGenerator;
 
         /// <summary>
         /// Creates a new orchestrator with default generators.
         /// </summary>
         public CodeGenerationOrchestrator()
-            : this(null, null)
+            : this(null, null, null, null)
         {
         }
 
@@ -31,10 +35,14 @@ namespace Schedule1ModdingTool.Services.CodeGeneration.Orchestration
         /// <param name="npcGenerator">Custom NPC generator, or null for default.</param>
         public CodeGenerationOrchestrator(
             ICodeGenerator<QuestBlueprint>? questGenerator = null,
-            ICodeGenerator<NpcBlueprint>? npcGenerator = null)
+            ICodeGenerator<NpcBlueprint>? npcGenerator = null,
+            ICodeGenerator<ItemBlueprint>? itemGenerator = null,
+            ICodeGenerator<PhoneAppBlueprint>? phoneAppGenerator = null)
         {
             _questGenerator = questGenerator ?? new QuestCodeGenerator();
             _npcGenerator = npcGenerator ?? new NpcCodeGenerator();
+            _itemGenerator = itemGenerator ?? new ItemCodeGenerator();
+            _phoneAppGenerator = phoneAppGenerator ?? new PhoneAppCodeGenerator();
         }
 
         /// <summary>
@@ -63,6 +71,28 @@ namespace Schedule1ModdingTool.Services.CodeGeneration.Orchestration
                 throw new ArgumentNullException(nameof(npc));
 
             return _npcGenerator.GenerateCode(npc);
+        }
+
+        /// <summary>
+        /// Generates complete C# source code for an item blueprint.
+        /// </summary>
+        public string GenerateItemCode(ItemBlueprint item)
+        {
+            if (item == null)
+                throw new ArgumentNullException(nameof(item));
+
+            return _itemGenerator.GenerateCode(item);
+        }
+
+        /// <summary>
+        /// Generates complete C# source code for a phone app blueprint.
+        /// </summary>
+        public string GeneratePhoneAppCode(PhoneAppBlueprint phoneApp)
+        {
+            if (phoneApp == null)
+                throw new ArgumentNullException(nameof(phoneApp));
+
+            return _phoneAppGenerator.GenerateCode(phoneApp);
         }
 
         /// <summary>
@@ -97,6 +127,36 @@ namespace Schedule1ModdingTool.Services.CodeGeneration.Orchestration
                 };
 
             return _npcGenerator.Validate(npc);
+        }
+
+        /// <summary>
+        /// Validates an item blueprint before generation.
+        /// </summary>
+        public CodeGenerationValidationResult ValidateItem(ItemBlueprint item)
+        {
+            if (item == null)
+                return new CodeGenerationValidationResult
+                {
+                    IsValid = false,
+                    Errors = { "Item blueprint cannot be null" }
+                };
+
+            return _itemGenerator.Validate(item);
+        }
+
+        /// <summary>
+        /// Validates a phone app blueprint before generation.
+        /// </summary>
+        public CodeGenerationValidationResult ValidatePhoneApp(PhoneAppBlueprint phoneApp)
+        {
+            if (phoneApp == null)
+                return new CodeGenerationValidationResult
+                {
+                    IsValid = false,
+                    Errors = { "Phone app blueprint cannot be null" }
+                };
+
+            return _phoneAppGenerator.Validate(phoneApp);
         }
 
         /// <summary>

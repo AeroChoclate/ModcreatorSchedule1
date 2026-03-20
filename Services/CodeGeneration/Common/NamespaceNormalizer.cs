@@ -10,6 +10,8 @@ namespace Schedule1ModdingTool.Services.CodeGeneration.Common
     {
         private const string DefaultNamespace = "Schedule1Mods.Quests";
         private const string DefaultNpcNamespace = "Schedule1Mods.NPCs";
+        private const string DefaultItemNamespace = "Schedule1Mods.Items";
+        private const string DefaultPhoneAppNamespace = "Schedule1Mods.PhoneApps";
 
         /// <summary>
         /// Normalizes a namespace string to a valid C# namespace.
@@ -68,6 +70,24 @@ namespace Schedule1ModdingTool.Services.CodeGeneration.Common
         public static string NormalizeForNpc(string? namespaceValue)
         {
             return Normalize(namespaceValue, DefaultNpcNamespace);
+        }
+
+        /// <summary>
+        /// Normalizes a namespace for item code generation.
+        /// Uses a default item-specific namespace if input is invalid.
+        /// </summary>
+        public static string NormalizeForItem(string? namespaceValue)
+        {
+            return Normalize(namespaceValue, DefaultItemNamespace);
+        }
+
+        /// <summary>
+        /// Normalizes a namespace for phone app code generation.
+        /// Uses a default phone-app-specific namespace if input is invalid.
+        /// </summary>
+        public static string NormalizeForPhoneApp(string? namespaceValue)
+        {
+            return Normalize(namespaceValue, DefaultPhoneAppNamespace);
         }
 
         /// <summary>

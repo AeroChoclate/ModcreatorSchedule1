@@ -54,6 +54,24 @@ namespace Schedule1ModdingTool.Views
             }
         }
 
+        private void NewItem_Click(object sender, RoutedEventArgs e)
+        {
+            var vm = GetMainViewModel();
+            if (vm != null && vm.AvailableItemBlueprints.Count > 0)
+            {
+                vm.AddItemCommand.Execute(vm.AvailableItemBlueprints[0]);
+            }
+        }
+
+        private void NewCustomClothing_Click(object sender, RoutedEventArgs e)
+        {
+            var vm = GetMainViewModel();
+            if (vm != null)
+            {
+                vm.NewCustomClothingCommand.Execute(null);
+            }
+        }
+
         private void NewFolder_Click(object sender, RoutedEventArgs e)
         {
             GetMainViewModel()?.AddFolderCommand.Execute(null);
@@ -96,6 +114,30 @@ namespace Schedule1ModdingTool.Views
             });
         }
 
+        private void ItemTile_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            if (sender is not FrameworkElement element || element.DataContext is not ItemBlueprint item)
+                return;
+
+            _dragStartPoint = e.GetPosition(null);
+            HandleTileInteraction(item, () =>
+            {
+                GetMainViewModel()?.OpenItemInTab(item);
+            });
+        }
+
+        private void PhoneAppTile_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            if (sender is not FrameworkElement element || element.DataContext is not PhoneAppBlueprint phoneApp)
+                return;
+
+            _dragStartPoint = e.GetPosition(null);
+            HandleTileInteraction(phoneApp, () =>
+            {
+                GetMainViewModel()?.OpenPhoneAppInTab(phoneApp);
+            });
+        }
+
         private void BreadcrumbButton_Click(object sender, RoutedEventArgs e)
         {
             if (sender is Button btn && btn.DataContext is ModFolder folder)
@@ -125,6 +167,12 @@ namespace Schedule1ModdingTool.Views
                     break;
                 case NpcBlueprint npc:
                     vm.SelectedNpc = npc;
+                    break;
+                case ItemBlueprint itemBlueprint:
+                    vm.SelectedItemBlueprint = itemBlueprint;
+                    break;
+                case PhoneAppBlueprint phoneApp:
+                    vm.SelectedPhoneApp = phoneApp;
                     break;
             }
 
@@ -171,6 +219,30 @@ namespace Schedule1ModdingTool.Views
             e.Handled = false;
         }
 
+        private void ItemTile_MouseRightButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            if (sender is FrameworkElement element && element.DataContext is ItemBlueprint item)
+            {
+                var vm = GetMainViewModel();
+                if (vm != null)
+                {
+                    vm.SelectedItemBlueprint = item;
+                }
+            }
+        }
+
+        private void PhoneAppTile_MouseRightButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            if (sender is FrameworkElement element && element.DataContext is PhoneAppBlueprint phoneApp)
+            {
+                var vm = GetMainViewModel();
+                if (vm != null)
+                {
+                    vm.SelectedPhoneApp = phoneApp;
+                }
+            }
+        }
+
         private T? GetDataContextFromMenuItem<T>(MenuItem menuItem) where T : class
         {
             // Try to get from menu item's DataContext first
@@ -212,6 +284,18 @@ namespace Schedule1ModdingTool.Views
             }
         }
 
+        private void OpenItem_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is MenuItem menuItem)
+            {
+                var item = GetDataContextFromMenuItem<ItemBlueprint>(menuItem);
+                if (item != null)
+                {
+                    GetMainViewModel()?.OpenItemInTab(item);
+                }
+            }
+        }
+
         private void OpenFolder_Click(object sender, RoutedEventArgs e)
         {
             if (sender is MenuItem menuItem)
@@ -244,6 +328,30 @@ namespace Schedule1ModdingTool.Views
                 if (npc != null)
                 {
                     GetMainViewModel()?.DuplicateNpcCommand.Execute(npc);
+                }
+            }
+        }
+
+        private void OpenPhoneApp_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is MenuItem menuItem)
+            {
+                var phoneApp = GetDataContextFromMenuItem<PhoneAppBlueprint>(menuItem);
+                if (phoneApp != null)
+                {
+                    GetMainViewModel()?.OpenPhoneAppInTab(phoneApp);
+                }
+            }
+        }
+
+        private void DuplicateItem_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is MenuItem menuItem)
+            {
+                var item = GetDataContextFromMenuItem<ItemBlueprint>(menuItem);
+                if (item != null)
+                {
+                    GetMainViewModel()?.DuplicateItemCommand.Execute(item);
                 }
             }
         }
@@ -289,6 +397,35 @@ namespace Schedule1ModdingTool.Views
                     {
                         vm.SelectedNpc = npc;
                         vm.RemoveNpcCommand.Execute(null);
+                    }
+                }
+            }
+        }
+
+        private void DuplicatePhoneApp_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is MenuItem menuItem)
+            {
+                var phoneApp = GetDataContextFromMenuItem<PhoneAppBlueprint>(menuItem);
+                if (phoneApp != null)
+                {
+                    GetMainViewModel()?.DuplicatePhoneAppCommand.Execute(phoneApp);
+                }
+            }
+        }
+
+        private void DeleteItem_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is MenuItem menuItem)
+            {
+                var item = GetDataContextFromMenuItem<ItemBlueprint>(menuItem);
+                if (item != null)
+                {
+                    var vm = GetMainViewModel();
+                    if (vm != null)
+                    {
+                        vm.SelectedItemBlueprint = item;
+                        vm.RemoveItemCommand.Execute(null);
                     }
                 }
             }
@@ -352,6 +489,55 @@ namespace Schedule1ModdingTool.Views
                         var parts = newName.Split(new[] { ' ' }, 2, StringSplitOptions.RemoveEmptyEntries);
                         npc.FirstName = parts.Length > 0 ? parts[0] : newName;
                         npc.LastName = parts.Length > 1 ? parts[1] : "";
+                    }
+                }
+            }
+        }
+
+        private void DeletePhoneApp_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is MenuItem menuItem)
+            {
+                var phoneApp = GetDataContextFromMenuItem<PhoneAppBlueprint>(menuItem);
+                if (phoneApp != null)
+                {
+                    var vm = GetMainViewModel();
+                    if (vm != null)
+                    {
+                        vm.SelectedPhoneApp = phoneApp;
+                        vm.RemovePhoneAppCommand.Execute(null);
+                    }
+                }
+            }
+        }
+
+        private void RenameItem_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is MenuItem menuItem)
+            {
+                var item = GetDataContextFromMenuItem<ItemBlueprint>(menuItem);
+                if (item != null)
+                {
+                    var newName = ShowInputDialog("Rename Item", "Enter new item name:", item.ItemName);
+                    if (!string.IsNullOrWhiteSpace(newName) && newName != item.ItemName)
+                    {
+                        item.ItemName = newName;
+                    }
+                }
+            }
+        }
+
+        private void RenamePhoneApp_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is MenuItem menuItem)
+            {
+                var phoneApp = GetDataContextFromMenuItem<PhoneAppBlueprint>(menuItem);
+                if (phoneApp != null)
+                {
+                    var newName = ShowInputDialog("Rename Phone App", "Enter new app title:", phoneApp.AppTitle);
+                    if (!string.IsNullOrWhiteSpace(newName) && newName != phoneApp.AppTitle)
+                    {
+                        phoneApp.AppTitle = newName;
                     }
                 }
             }
@@ -485,11 +671,59 @@ namespace Schedule1ModdingTool.Views
             }
         }
 
+        private void ItemTile_MouseMove(object sender, MouseEventArgs e)
+        {
+            if (e.LeftButton == MouseButtonState.Pressed && sender is FrameworkElement element)
+            {
+                if (!_isDragging)
+                {
+                    var position = e.GetPosition(null);
+                    if (Math.Abs(position.X - _dragStartPoint.X) > SystemParameters.MinimumHorizontalDragDistance ||
+                        Math.Abs(position.Y - _dragStartPoint.Y) > SystemParameters.MinimumVerticalDragDistance)
+                    {
+                        if (element.DataContext is ItemBlueprint item)
+                        {
+                            _isDragging = true;
+                            _doubleClickTimer.Stop();
+                            _lastClickedItem = null;
+                            var dataObject = new DataObject("ItemBlueprint", item);
+                            DragDrop.DoDragDrop(element, dataObject, DragDropEffects.Move);
+                            _isDragging = false;
+                        }
+                    }
+                }
+            }
+        }
+
+        private void PhoneAppTile_MouseMove(object sender, MouseEventArgs e)
+        {
+            if (e.LeftButton == MouseButtonState.Pressed && sender is FrameworkElement element)
+            {
+                if (!_isDragging)
+                {
+                    var position = e.GetPosition(null);
+                    if (Math.Abs(position.X - _dragStartPoint.X) > SystemParameters.MinimumHorizontalDragDistance ||
+                        Math.Abs(position.Y - _dragStartPoint.Y) > SystemParameters.MinimumVerticalDragDistance)
+                    {
+                        if (element.DataContext is PhoneAppBlueprint phoneApp)
+                        {
+                            _isDragging = true;
+                            _doubleClickTimer.Stop();
+                            _lastClickedItem = null;
+                            var dataObject = new DataObject("PhoneAppBlueprint", phoneApp);
+                            DragDrop.DoDragDrop(element, dataObject, DragDropEffects.Move);
+                            _isDragging = false;
+                        }
+                    }
+                }
+            }
+        }
+
         private void FolderTile_DragOver(object sender, DragEventArgs e)
         {
             if (sender is FrameworkElement element && element.DataContext is ModFolder folder)
             {
-                if (e.Data.GetDataPresent("QuestBlueprint") || e.Data.GetDataPresent("NpcBlueprint"))
+                if (e.Data.GetDataPresent("QuestBlueprint") || e.Data.GetDataPresent("NpcBlueprint") || e.Data.GetDataPresent("ItemBlueprint") || e.Data.GetDataPresent("PhoneAppBlueprint"))
                 {
                     e.Effects = DragDropEffects.Move;
                     e.Handled = true;
@@ -515,6 +749,16 @@ namespace Schedule1ModdingTool.Views
                     npc.FolderId = folder.Id;
                     e.Handled = true;
                 }
+                else if (e.Data.GetData("ItemBlueprint") is ItemBlueprint item)
+                {
+                    item.FolderId = folder.Id;
+                    e.Handled = true;
+                }
+                else if (e.Data.GetData("PhoneAppBlueprint") is PhoneAppBlueprint phoneApp)
+                {
+                    phoneApp.FolderId = folder.Id;
+                    e.Handled = true;
+                }
             }
         }
 
@@ -522,7 +766,7 @@ namespace Schedule1ModdingTool.Views
         {
             if (sender is Border border)
             {
-                if (e.Data.GetDataPresent("QuestBlueprint") || e.Data.GetDataPresent("NpcBlueprint"))
+                if (e.Data.GetDataPresent("QuestBlueprint") || e.Data.GetDataPresent("NpcBlueprint") || e.Data.GetDataPresent("ItemBlueprint") || e.Data.GetDataPresent("PhoneAppBlueprint"))
                 {
                     border.BorderBrush = new SolidColorBrush(Color.FromArgb(200, 100, 150, 255));
                     border.BorderThickness = new Thickness(2);
@@ -542,7 +786,7 @@ namespace Schedule1ModdingTool.Views
 
         private void UpButton_DragOver(object sender, DragEventArgs e)
         {
-            if (e.Data.GetDataPresent("QuestBlueprint") || e.Data.GetDataPresent("NpcBlueprint"))
+            if (e.Data.GetDataPresent("QuestBlueprint") || e.Data.GetDataPresent("NpcBlueprint") || e.Data.GetDataPresent("ItemBlueprint") || e.Data.GetDataPresent("PhoneAppBlueprint"))
             {
                 e.Effects = DragDropEffects.Move;
                 e.Handled = true;
@@ -569,13 +813,23 @@ namespace Schedule1ModdingTool.Views
                 npc.FolderId = parentId;
                 e.Handled = true;
             }
+            else if (e.Data.GetData("ItemBlueprint") is ItemBlueprint item)
+            {
+                item.FolderId = parentId;
+                e.Handled = true;
+            }
+            else if (e.Data.GetData("PhoneAppBlueprint") is PhoneAppBlueprint phoneApp)
+            {
+                phoneApp.FolderId = parentId;
+                e.Handled = true;
+            }
         }
 
         private void UpButton_DragEnter(object sender, DragEventArgs e)
         {
             if (sender is Button button)
             {
-                if (e.Data.GetDataPresent("QuestBlueprint") || e.Data.GetDataPresent("NpcBlueprint"))
+                if (e.Data.GetDataPresent("QuestBlueprint") || e.Data.GetDataPresent("NpcBlueprint") || e.Data.GetDataPresent("ItemBlueprint") || e.Data.GetDataPresent("PhoneAppBlueprint"))
                 {
                     button.Background = new SolidColorBrush(Color.FromArgb(100, 100, 150, 255));
                 }
@@ -594,7 +848,7 @@ namespace Schedule1ModdingTool.Views
         {
             if (sender is Button btn && btn.DataContext is ModFolder folder)
             {
-                if (e.Data.GetDataPresent("QuestBlueprint") || e.Data.GetDataPresent("NpcBlueprint"))
+                if (e.Data.GetDataPresent("QuestBlueprint") || e.Data.GetDataPresent("NpcBlueprint") || e.Data.GetDataPresent("ItemBlueprint") || e.Data.GetDataPresent("PhoneAppBlueprint"))
                 {
                     e.Effects = DragDropEffects.Move;
                     e.Handled = true;
@@ -616,6 +870,16 @@ namespace Schedule1ModdingTool.Views
                     npc.FolderId = folder.Id;
                     e.Handled = true;
                 }
+                else if (e.Data.GetData("ItemBlueprint") is ItemBlueprint item)
+                {
+                    item.FolderId = folder.Id;
+                    e.Handled = true;
+                }
+                else if (e.Data.GetData("PhoneAppBlueprint") is PhoneAppBlueprint phoneApp)
+                {
+                    phoneApp.FolderId = folder.Id;
+                    e.Handled = true;
+                }
             }
         }
 
@@ -623,7 +887,7 @@ namespace Schedule1ModdingTool.Views
         {
             if (sender is Button button)
             {
-                if (e.Data.GetDataPresent("QuestBlueprint") || e.Data.GetDataPresent("NpcBlueprint"))
+                if (e.Data.GetDataPresent("QuestBlueprint") || e.Data.GetDataPresent("NpcBlueprint") || e.Data.GetDataPresent("ItemBlueprint") || e.Data.GetDataPresent("PhoneAppBlueprint"))
                 {
                     button.Background = new SolidColorBrush(Color.FromArgb(100, 100, 150, 255));
                 }

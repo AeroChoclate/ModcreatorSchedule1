@@ -8,7 +8,7 @@ using Newtonsoft.Json;
 namespace Schedule1ModdingTool.Models
 {
     /// <summary>
-    /// Represents a project containing multiple quest blueprints
+    /// Represents a project containing mod elements and resources.
     /// </summary>
     public class QuestProject : ObservableObject
     {
@@ -18,6 +18,8 @@ namespace Schedule1ModdingTool.Models
         private readonly HashSet<QuestObjective> _trackedObjectives = new HashSet<QuestObjective>();
         private readonly HashSet<QuestTrigger> _trackedTriggers = new HashSet<QuestTrigger>();
         private readonly HashSet<NpcBlueprint> _trackedNpcs = new HashSet<NpcBlueprint>();
+        private readonly HashSet<ItemBlueprint> _trackedItems = new HashSet<ItemBlueprint>();
+        private readonly HashSet<PhoneAppBlueprint> _trackedPhoneApps = new HashSet<PhoneAppBlueprint>();
         private readonly HashSet<ResourceAsset> _trackedResources = new HashSet<ResourceAsset>();
         private readonly HashSet<ModFolder> _trackedFolders = new HashSet<ModFolder>();
         private bool _suppressNotifications;
@@ -87,6 +89,12 @@ namespace Schedule1ModdingTool.Models
         [JsonProperty("npcs")]
         public ObservableCollection<NpcBlueprint> Npcs { get; } = new ObservableCollection<NpcBlueprint>();
 
+        [JsonProperty("items")]
+        public ObservableCollection<ItemBlueprint> Items { get; } = new ObservableCollection<ItemBlueprint>();
+
+        [JsonProperty("phoneApps")]
+        public ObservableCollection<PhoneAppBlueprint> PhoneApps { get; } = new ObservableCollection<PhoneAppBlueprint>();
+
         [JsonProperty("resources")]
         public ObservableCollection<ResourceAsset> Resources { get; } = new ObservableCollection<ResourceAsset>();
 
@@ -110,6 +118,8 @@ namespace Schedule1ModdingTool.Models
             ProjectDescription = "A new quest modding project for Schedule 1";
             Quests.CollectionChanged += OnQuestsCollectionChanged;
             Npcs.CollectionChanged += OnNpcsCollectionChanged;
+            Items.CollectionChanged += OnItemsCollectionChanged;
+            PhoneApps.CollectionChanged += OnPhoneAppsCollectionChanged;
             Folders.CollectionChanged += OnFoldersCollectionChanged;
             Resources.CollectionChanged += OnResourcesCollectionChanged;
             EnsureRootFolder();
@@ -134,6 +144,26 @@ namespace Schedule1ModdingTool.Models
         public void RemoveNpc(NpcBlueprint npc)
         {
             Npcs.Remove(npc);
+        }
+
+        public void AddItem(ItemBlueprint item)
+        {
+            Items.Add(item);
+        }
+
+        public void RemoveItem(ItemBlueprint item)
+        {
+            Items.Remove(item);
+        }
+
+        public void AddPhoneApp(PhoneAppBlueprint phoneApp)
+        {
+            PhoneApps.Add(phoneApp);
+        }
+
+        public void RemovePhoneApp(PhoneAppBlueprint phoneApp)
+        {
+            PhoneApps.Remove(phoneApp);
         }
 
         public void AddResource(ResourceAsset asset)
@@ -199,21 +229,21 @@ namespace Schedule1ModdingTool.Models
             {
                 project.FilePath = filePath;
                 
-                // Backward compatibility: Initialize ProjectNamespace from first quest if not set
+                // Backward compatibility: Initialize ProjectNamespace from the first authored element if not set
                 if (string.IsNullOrWhiteSpace(project.ProjectNamespace))
                 {
-                    var firstQuest = project.Quests.FirstOrDefault();
-                    if (firstQuest != null && !string.IsNullOrWhiteSpace(firstQuest.Namespace))
+                    var firstNamespace = project.Quests.FirstOrDefault()?.Namespace
+                        ?? project.Items.FirstOrDefault()?.Namespace
+                        ?? project.Npcs.FirstOrDefault()?.Namespace
+                        ?? project.PhoneApps.FirstOrDefault()?.Namespace;
+
+                    if (!string.IsNullOrWhiteSpace(firstNamespace))
                     {
-                        // Extract root namespace from quest namespace (e.g., "TestMod.Quests" -> "TestMod")
-                        var questNamespace = firstQuest.Namespace;
-                        project.ProjectNamespace = questNamespace.Contains('.') && questNamespace.EndsWith(".Quests")
-                            ? questNamespace.Substring(0, questNamespace.LastIndexOf('.'))
-                            : questNamespace;
+                        project.ProjectNamespace = TrimElementNamespace(firstNamespace);
                     }
                     else
                     {
-                        // Fall back to project name if no quests exist
+                        // Fall back to project name if no elements exist
                         project.ProjectNamespace = string.IsNullOrWhiteSpace(project.ProjectName)
                             ? "GeneratedMod"
                             : project.ProjectName;
@@ -222,6 +252,8 @@ namespace Schedule1ModdingTool.Models
                 
                 project.AttachExistingQuestHandlers();
                 project.AttachExistingNpcHandlers();
+                project.AttachExistingItemHandlers();
+                project.AttachExistingPhoneAppHandlers();
                 project.AttachExistingFolderHandlers();
                 project.AttachExistingResourceHandlers();
                 project.EnsureRootFolder();
@@ -229,6 +261,20 @@ namespace Schedule1ModdingTool.Models
                 project._suppressNotifications = false;
             }
             return project;
+        }
+
+        private static string TrimElementNamespace(string namespaceValue)
+        {
+            if (namespaceValue.EndsWith(".Quests", StringComparison.Ordinal) ||
+                namespaceValue.EndsWith(".NPCs", StringComparison.Ordinal) ||
+                namespaceValue.EndsWith(".Items", StringComparison.Ordinal) ||
+                namespaceValue.EndsWith(".PhoneApps", StringComparison.Ordinal))
+            {
+                var lastDot = namespaceValue.LastIndexOf('.');
+                return lastDot > 0 ? namespaceValue.Substring(0, lastDot) : namespaceValue;
+            }
+
+            return namespaceValue;
         }
 
         private void OnQuestsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
@@ -339,6 +385,11 @@ namespace Schedule1ModdingTool.Models
                 npc.InventoryDefaults.StartupItems.CollectionChanged += OnNpcCollectionChanged;
             }
 
+            if (npc.RuntimeSettings != null)
+            {
+                npc.RuntimeSettings.PropertyChanged += NpcOnPropertyChanged;
+            }
+
             if (npc.Appearance != null)
             {
                 npc.Appearance.PropertyChanged += NpcOnPropertyChanged;
@@ -346,6 +397,54 @@ namespace Schedule1ModdingTool.Models
                 npc.Appearance.BodyLayers.CollectionChanged += OnNpcCollectionChanged;
                 npc.Appearance.AccessoryLayers.CollectionChanged += OnNpcCollectionChanged;
             }
+
+            npc.DialogueDatabaseEntries.CollectionChanged += OnNpcDialogueDatabaseEntriesCollectionChanged;
+            foreach (var entry in npc.DialogueDatabaseEntries)
+            {
+                AttachNpcDialogueDatabaseEntryHandlers(entry);
+            }
+
+            npc.DialogueContainers.CollectionChanged += OnNpcDialogueContainersCollectionChanged;
+            foreach (var container in npc.DialogueContainers)
+            {
+                AttachNpcDialogueContainerHandlers(container);
+            }
+
+            npc.DialogueCallbacks.CollectionChanged += OnNpcDialogueCallbacksCollectionChanged;
+            foreach (var callback in npc.DialogueCallbacks)
+            {
+                AttachNpcDialogueCallbackHandlers(callback);
+            }
+
+            npc.DialogueInjections.CollectionChanged += OnNpcDialogueInjectionsCollectionChanged;
+            foreach (var injection in npc.DialogueInjections)
+            {
+                AttachNpcDialogueInjectionHandlers(injection);
+            }
+
+            npc.EventReactions.CollectionChanged += OnNpcEventReactionsCollectionChanged;
+            foreach (var reaction in npc.EventReactions)
+            {
+                AttachNpcEventReactionHandlers(reaction);
+            }
+        }
+
+        private void AttachItemHandlers(ItemBlueprint item)
+        {
+            if (_trackedItems.Contains(item))
+                return;
+
+            _trackedItems.Add(item);
+            item.PropertyChanged += ItemOnPropertyChanged;
+        }
+
+        private void AttachPhoneAppHandlers(PhoneAppBlueprint phoneApp)
+        {
+            if (_trackedPhoneApps.Contains(phoneApp))
+                return;
+
+            _trackedPhoneApps.Add(phoneApp);
+            phoneApp.PropertyChanged += PhoneAppOnPropertyChanged;
         }
 
         private void DetachQuestHandlers(QuestBlueprint quest)
@@ -419,6 +518,11 @@ namespace Schedule1ModdingTool.Models
                 npc.InventoryDefaults.StartupItems.CollectionChanged -= OnNpcCollectionChanged;
             }
 
+            if (npc.RuntimeSettings != null)
+            {
+                npc.RuntimeSettings.PropertyChanged -= NpcOnPropertyChanged;
+            }
+
             if (npc.Appearance != null)
             {
                 npc.Appearance.PropertyChanged -= NpcOnPropertyChanged;
@@ -426,6 +530,52 @@ namespace Schedule1ModdingTool.Models
                 npc.Appearance.BodyLayers.CollectionChanged -= OnNpcCollectionChanged;
                 npc.Appearance.AccessoryLayers.CollectionChanged -= OnNpcCollectionChanged;
             }
+
+            npc.DialogueDatabaseEntries.CollectionChanged -= OnNpcDialogueDatabaseEntriesCollectionChanged;
+            foreach (var entry in npc.DialogueDatabaseEntries)
+            {
+                DetachNpcDialogueDatabaseEntryHandlers(entry);
+            }
+
+            npc.DialogueContainers.CollectionChanged -= OnNpcDialogueContainersCollectionChanged;
+            foreach (var container in npc.DialogueContainers)
+            {
+                DetachNpcDialogueContainerHandlers(container);
+            }
+
+            npc.DialogueCallbacks.CollectionChanged -= OnNpcDialogueCallbacksCollectionChanged;
+            foreach (var callback in npc.DialogueCallbacks)
+            {
+                DetachNpcDialogueCallbackHandlers(callback);
+            }
+
+            npc.DialogueInjections.CollectionChanged -= OnNpcDialogueInjectionsCollectionChanged;
+            foreach (var injection in npc.DialogueInjections)
+            {
+                DetachNpcDialogueInjectionHandlers(injection);
+            }
+
+            npc.EventReactions.CollectionChanged -= OnNpcEventReactionsCollectionChanged;
+            foreach (var reaction in npc.EventReactions)
+            {
+                DetachNpcEventReactionHandlers(reaction);
+            }
+        }
+
+        private void DetachItemHandlers(ItemBlueprint item)
+        {
+            if (!_trackedItems.Remove(item))
+                return;
+
+            item.PropertyChanged -= ItemOnPropertyChanged;
+        }
+
+        private void DetachPhoneAppHandlers(PhoneAppBlueprint phoneApp)
+        {
+            if (!_trackedPhoneApps.Remove(phoneApp))
+                return;
+
+            phoneApp.PropertyChanged -= PhoneAppOnPropertyChanged;
         }
 
         private void QuestOnPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -549,6 +699,17 @@ namespace Schedule1ModdingTool.Models
                         }
                         break;
 
+                    case nameof(NpcBlueprint.RuntimeSettings):
+                        if (npc.RuntimeSettings != null)
+                        {
+                            npc.RuntimeSettings.PropertyChanged -= NpcOnPropertyChanged;
+                        }
+                        if (npc.RuntimeSettings != null)
+                        {
+                            npc.RuntimeSettings.PropertyChanged += NpcOnPropertyChanged;
+                        }
+                        break;
+
                     case nameof(NpcBlueprint.Appearance):
                         if (npc.Appearance != null)
                         {
@@ -569,6 +730,18 @@ namespace Schedule1ModdingTool.Models
             }
             // If sender is a nested object (CustomerDefaults, etc.), just mark as modified
             // The MarkAsModified() call above handles this case
+        }
+
+        private void ItemOnPropertyChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            MarkAsModified();
+            OnPropertyChanged(nameof(Items));
+        }
+
+        private void PhoneAppOnPropertyChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            MarkAsModified();
+            OnPropertyChanged(nameof(PhoneApps));
         }
 
         private void OnObjectivesCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
@@ -789,6 +962,327 @@ namespace Schedule1ModdingTool.Models
             action.PropertyChanged -= NpcOnPropertyChanged;
         }
 
+        private void AttachNpcDialogueDatabaseEntryHandlers(NpcDialogueDatabaseEntryBlueprint entry)
+        {
+            entry.PropertyChanged += NpcOnPropertyChanged;
+        }
+
+        private void DetachNpcDialogueDatabaseEntryHandlers(NpcDialogueDatabaseEntryBlueprint entry)
+        {
+            entry.PropertyChanged -= NpcOnPropertyChanged;
+        }
+
+        private void AttachNpcDialogueContainerHandlers(NpcDialogueContainerBlueprint container)
+        {
+            container.PropertyChanged += NpcOnPropertyChanged;
+            container.Nodes.CollectionChanged += OnNpcDialogueNodesCollectionChanged;
+            foreach (var node in container.Nodes)
+            {
+                AttachNpcDialogueNodeHandlers(node);
+            }
+        }
+
+        private void DetachNpcDialogueContainerHandlers(NpcDialogueContainerBlueprint container)
+        {
+            container.PropertyChanged -= NpcOnPropertyChanged;
+            container.Nodes.CollectionChanged -= OnNpcDialogueNodesCollectionChanged;
+            foreach (var node in container.Nodes)
+            {
+                DetachNpcDialogueNodeHandlers(node);
+            }
+        }
+
+        private void AttachNpcDialogueNodeHandlers(NpcDialogueNodeBlueprint node)
+        {
+            node.PropertyChanged += NpcOnPropertyChanged;
+            node.Choices.CollectionChanged += OnNpcDialogueChoicesCollectionChanged;
+            foreach (var choice in node.Choices)
+            {
+                AttachNpcDialogueChoiceHandlers(choice);
+            }
+        }
+
+        private void DetachNpcDialogueNodeHandlers(NpcDialogueNodeBlueprint node)
+        {
+            node.PropertyChanged -= NpcOnPropertyChanged;
+            node.Choices.CollectionChanged -= OnNpcDialogueChoicesCollectionChanged;
+            foreach (var choice in node.Choices)
+            {
+                DetachNpcDialogueChoiceHandlers(choice);
+            }
+        }
+
+        private void AttachNpcDialogueChoiceHandlers(NpcDialogueChoiceBlueprint choice)
+        {
+            choice.PropertyChanged += NpcOnPropertyChanged;
+        }
+
+        private void DetachNpcDialogueChoiceHandlers(NpcDialogueChoiceBlueprint choice)
+        {
+            choice.PropertyChanged -= NpcOnPropertyChanged;
+        }
+
+        private void AttachNpcDialogueCallbackHandlers(NpcDialogueCallbackBlueprint callback)
+        {
+            callback.PropertyChanged += NpcOnPropertyChanged;
+        }
+
+        private void DetachNpcDialogueCallbackHandlers(NpcDialogueCallbackBlueprint callback)
+        {
+            callback.PropertyChanged -= NpcOnPropertyChanged;
+        }
+
+        private void AttachNpcDialogueInjectionHandlers(NpcDialogueInjectionBlueprint injection)
+        {
+            injection.PropertyChanged += NpcOnPropertyChanged;
+        }
+
+        private void DetachNpcDialogueInjectionHandlers(NpcDialogueInjectionBlueprint injection)
+        {
+            injection.PropertyChanged -= NpcOnPropertyChanged;
+        }
+
+        private void AttachNpcEventReactionHandlers(NpcRuntimeEventReactionBlueprint reaction)
+        {
+            reaction.PropertyChanged += NpcOnPropertyChanged;
+        }
+
+        private void DetachNpcEventReactionHandlers(NpcRuntimeEventReactionBlueprint reaction)
+        {
+            reaction.PropertyChanged -= NpcOnPropertyChanged;
+        }
+
+        private void OnNpcDialogueDatabaseEntriesCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+        {
+            if (e.Action == NotifyCollectionChangedAction.Reset)
+            {
+                MarkAsModified();
+                return;
+            }
+
+            if (e.NewItems != null)
+            {
+                foreach (var item in e.NewItems)
+                {
+                    if (item is NpcDialogueDatabaseEntryBlueprint entry)
+                    {
+                        AttachNpcDialogueDatabaseEntryHandlers(entry);
+                    }
+                }
+            }
+
+            if (e.OldItems != null)
+            {
+                foreach (var item in e.OldItems)
+                {
+                    if (item is NpcDialogueDatabaseEntryBlueprint entry)
+                    {
+                        DetachNpcDialogueDatabaseEntryHandlers(entry);
+                    }
+                }
+            }
+
+            MarkAsModified();
+        }
+
+        private void OnNpcDialogueContainersCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+        {
+            if (e.Action == NotifyCollectionChangedAction.Reset)
+            {
+                MarkAsModified();
+                return;
+            }
+
+            if (e.NewItems != null)
+            {
+                foreach (var item in e.NewItems)
+                {
+                    if (item is NpcDialogueContainerBlueprint container)
+                    {
+                        AttachNpcDialogueContainerHandlers(container);
+                    }
+                }
+            }
+
+            if (e.OldItems != null)
+            {
+                foreach (var item in e.OldItems)
+                {
+                    if (item is NpcDialogueContainerBlueprint container)
+                    {
+                        DetachNpcDialogueContainerHandlers(container);
+                    }
+                }
+            }
+
+            MarkAsModified();
+        }
+
+        private void OnNpcDialogueNodesCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+        {
+            if (e.Action == NotifyCollectionChangedAction.Reset)
+            {
+                MarkAsModified();
+                return;
+            }
+
+            if (e.NewItems != null)
+            {
+                foreach (var item in e.NewItems)
+                {
+                    if (item is NpcDialogueNodeBlueprint node)
+                    {
+                        AttachNpcDialogueNodeHandlers(node);
+                    }
+                }
+            }
+
+            if (e.OldItems != null)
+            {
+                foreach (var item in e.OldItems)
+                {
+                    if (item is NpcDialogueNodeBlueprint node)
+                    {
+                        DetachNpcDialogueNodeHandlers(node);
+                    }
+                }
+            }
+
+            MarkAsModified();
+        }
+
+        private void OnNpcDialogueChoicesCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+        {
+            if (e.Action == NotifyCollectionChangedAction.Reset)
+            {
+                MarkAsModified();
+                return;
+            }
+
+            if (e.NewItems != null)
+            {
+                foreach (var item in e.NewItems)
+                {
+                    if (item is NpcDialogueChoiceBlueprint choice)
+                    {
+                        AttachNpcDialogueChoiceHandlers(choice);
+                    }
+                }
+            }
+
+            if (e.OldItems != null)
+            {
+                foreach (var item in e.OldItems)
+                {
+                    if (item is NpcDialogueChoiceBlueprint choice)
+                    {
+                        DetachNpcDialogueChoiceHandlers(choice);
+                    }
+                }
+            }
+
+            MarkAsModified();
+        }
+
+        private void OnNpcDialogueCallbacksCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+        {
+            if (e.Action == NotifyCollectionChangedAction.Reset)
+            {
+                MarkAsModified();
+                return;
+            }
+
+            if (e.NewItems != null)
+            {
+                foreach (var item in e.NewItems)
+                {
+                    if (item is NpcDialogueCallbackBlueprint callback)
+                    {
+                        AttachNpcDialogueCallbackHandlers(callback);
+                    }
+                }
+            }
+
+            if (e.OldItems != null)
+            {
+                foreach (var item in e.OldItems)
+                {
+                    if (item is NpcDialogueCallbackBlueprint callback)
+                    {
+                        DetachNpcDialogueCallbackHandlers(callback);
+                    }
+                }
+            }
+
+            MarkAsModified();
+        }
+
+        private void OnNpcDialogueInjectionsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+        {
+            if (e.Action == NotifyCollectionChangedAction.Reset)
+            {
+                MarkAsModified();
+                return;
+            }
+
+            if (e.NewItems != null)
+            {
+                foreach (var item in e.NewItems)
+                {
+                    if (item is NpcDialogueInjectionBlueprint injection)
+                    {
+                        AttachNpcDialogueInjectionHandlers(injection);
+                    }
+                }
+            }
+
+            if (e.OldItems != null)
+            {
+                foreach (var item in e.OldItems)
+                {
+                    if (item is NpcDialogueInjectionBlueprint injection)
+                    {
+                        DetachNpcDialogueInjectionHandlers(injection);
+                    }
+                }
+            }
+
+            MarkAsModified();
+        }
+
+        private void OnNpcEventReactionsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+        {
+            if (e.Action == NotifyCollectionChangedAction.Reset)
+            {
+                MarkAsModified();
+                return;
+            }
+
+            if (e.NewItems != null)
+            {
+                foreach (var item in e.NewItems)
+                {
+                    if (item is NpcRuntimeEventReactionBlueprint reaction)
+                    {
+                        AttachNpcEventReactionHandlers(reaction);
+                    }
+                }
+            }
+
+            if (e.OldItems != null)
+            {
+                foreach (var item in e.OldItems)
+                {
+                    if (item is NpcRuntimeEventReactionBlueprint reaction)
+                    {
+                        DetachNpcEventReactionHandlers(reaction);
+                    }
+                }
+            }
+
+            MarkAsModified();
+        }
+
         private void OnObjectiveTriggersCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
         {
             if (e.Action == NotifyCollectionChangedAction.Reset)
@@ -835,6 +1329,22 @@ namespace Schedule1ModdingTool.Models
             foreach (var npc in Npcs)
             {
                 AttachNpcHandlers(npc);
+            }
+        }
+
+        internal void AttachExistingItemHandlers()
+        {
+            foreach (var item in Items)
+            {
+                AttachItemHandlers(item);
+            }
+        }
+
+        internal void AttachExistingPhoneAppHandlers()
+        {
+            foreach (var phoneApp in PhoneApps)
+            {
+                AttachPhoneAppHandlers(phoneApp);
             }
         }
 
@@ -885,6 +1395,16 @@ namespace Schedule1ModdingTool.Models
                 DetachNpcHandlers(npc);
             }
 
+            foreach (var item in _trackedItems.ToArray())
+            {
+                item.PropertyChanged -= ItemOnPropertyChanged;
+            }
+
+            foreach (var phoneApp in _trackedPhoneApps.ToArray())
+            {
+                phoneApp.PropertyChanged -= PhoneAppOnPropertyChanged;
+            }
+
             foreach (var folder in _trackedFolders.ToArray())
             {
                 folder.PropertyChanged -= FolderOnPropertyChanged;
@@ -898,11 +1418,15 @@ namespace Schedule1ModdingTool.Models
             _trackedObjectives.Clear();
             _trackedTriggers.Clear();
             _trackedNpcs.Clear();
+            _trackedItems.Clear();
+            _trackedPhoneApps.Clear();
             _trackedFolders.Clear();
             _trackedResources.Clear();
             RebuildObjectiveTracking();
             AttachExistingQuestHandlers();
             AttachExistingNpcHandlers();
+            AttachExistingItemHandlers();
+            AttachExistingPhoneAppHandlers();
             AttachExistingFolderHandlers();
             AttachExistingResourceHandlers();
         }
@@ -953,6 +1477,62 @@ namespace Schedule1ModdingTool.Models
             OnPropertyChanged(nameof(Npcs));
         }
 
+        private void OnItemsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+        {
+            if (e.NewItems != null)
+            {
+                foreach (var item in e.NewItems)
+                {
+                    if (item is ItemBlueprint blueprint)
+                    {
+                        AttachItemHandlers(blueprint);
+                    }
+                }
+            }
+
+            if (e.OldItems != null)
+            {
+                foreach (var item in e.OldItems)
+                {
+                    if (item is ItemBlueprint blueprint)
+                    {
+                        DetachItemHandlers(blueprint);
+                    }
+                }
+            }
+
+            MarkAsModified();
+            OnPropertyChanged(nameof(Items));
+        }
+
+        private void OnPhoneAppsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+        {
+            if (e.NewItems != null)
+            {
+                foreach (var item in e.NewItems)
+                {
+                    if (item is PhoneAppBlueprint blueprint)
+                    {
+                        AttachPhoneAppHandlers(blueprint);
+                    }
+                }
+            }
+
+            if (e.OldItems != null)
+            {
+                foreach (var item in e.OldItems)
+                {
+                    if (item is PhoneAppBlueprint blueprint)
+                    {
+                        DetachPhoneAppHandlers(blueprint);
+                    }
+                }
+            }
+
+            MarkAsModified();
+            OnPropertyChanged(nameof(PhoneApps));
+        }
+
         [OnDeserializing]
         private void OnDeserializing(StreamingContext context)
         {
@@ -961,6 +1541,10 @@ namespace Schedule1ModdingTool.Models
             Quests.CollectionChanged += OnQuestsCollectionChanged;
             Npcs.CollectionChanged -= OnNpcsCollectionChanged;
             Npcs.CollectionChanged += OnNpcsCollectionChanged;
+            Items.CollectionChanged -= OnItemsCollectionChanged;
+            Items.CollectionChanged += OnItemsCollectionChanged;
+            PhoneApps.CollectionChanged -= OnPhoneAppsCollectionChanged;
+            PhoneApps.CollectionChanged += OnPhoneAppsCollectionChanged;
             Folders.CollectionChanged -= OnFoldersCollectionChanged;
             Folders.CollectionChanged += OnFoldersCollectionChanged;
             Resources.CollectionChanged -= OnResourcesCollectionChanged;
@@ -972,6 +1556,8 @@ namespace Schedule1ModdingTool.Models
         {
             AttachExistingQuestHandlers();
             AttachExistingNpcHandlers();
+            AttachExistingItemHandlers();
+            AttachExistingPhoneAppHandlers();
             AttachExistingFolderHandlers();
             AttachExistingResourceHandlers();
             EnsureRootFolder();
@@ -1089,6 +1675,18 @@ namespace Schedule1ModdingTool.Models
             {
                 if (string.IsNullOrWhiteSpace(npc.FolderId))
                     npc.FolderId = RootFolderId;
+            }
+
+            foreach (var item in Items)
+            {
+                if (string.IsNullOrWhiteSpace(item.FolderId))
+                    item.FolderId = RootFolderId;
+            }
+
+            foreach (var phoneApp in PhoneApps)
+            {
+                if (string.IsNullOrWhiteSpace(phoneApp.FolderId))
+                    phoneApp.FolderId = RootFolderId;
             }
         }
     }

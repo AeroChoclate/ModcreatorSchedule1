@@ -18,6 +18,8 @@ namespace Schedule1ModdingTool.ViewModels
         private readonly ObservableCollection<ModFolder> _breadcrumb = new ObservableCollection<ModFolder>();
         private readonly HashSet<QuestBlueprint> _observedQuests = new HashSet<QuestBlueprint>();
         private readonly HashSet<NpcBlueprint> _observedNpcs = new HashSet<NpcBlueprint>();
+        private readonly HashSet<ItemBlueprint> _observedItems = new HashSet<ItemBlueprint>();
+        private readonly HashSet<PhoneAppBlueprint> _observedPhoneApps = new HashSet<PhoneAppBlueprint>();
 
         public WorkspaceViewModel()
         {
@@ -152,9 +154,55 @@ namespace Schedule1ModdingTool.ViewModels
             }
         }
 
+        public IEnumerable<ItemBlueprint> CurrentItems
+        {
+            get
+            {
+                if (Project == null || SelectedFolder == null)
+                    return Enumerable.Empty<ItemBlueprint>();
+
+                return Project.Items
+                    .Where(i => i.ItemType != ItemKindOption.Clothing)
+                    .Where(i => string.Equals(i.FolderId, SelectedFolder.Id, StringComparison.Ordinal))
+                    .Where(i => MatchesSearch(i.DisplayName))
+                    .OrderBy(i => i.DisplayName, StringComparer.OrdinalIgnoreCase);
+            }
+        }
+
+        public IEnumerable<ItemBlueprint> CurrentCustomClothing
+        {
+            get
+            {
+                if (Project == null || SelectedFolder == null)
+                    return Enumerable.Empty<ItemBlueprint>();
+
+                return Project.Items
+                    .Where(i => i.ItemType == ItemKindOption.Clothing)
+                    .Where(i => string.Equals(i.FolderId, SelectedFolder.Id, StringComparison.Ordinal))
+                    .Where(i => MatchesSearch(i.DisplayName))
+                    .OrderBy(i => i.DisplayName, StringComparer.OrdinalIgnoreCase);
+            }
+        }
+
+        public IEnumerable<PhoneAppBlueprint> CurrentPhoneApps
+        {
+            get
+            {
+                if (Project == null || SelectedFolder == null)
+                    return Enumerable.Empty<PhoneAppBlueprint>();
+
+                return Project.PhoneApps
+                    .Where(app => string.Equals(app.FolderId, SelectedFolder.Id, StringComparison.Ordinal))
+                    .Where(app => MatchesSearch(app.DisplayName))
+                    .OrderBy(app => app.DisplayName, StringComparer.OrdinalIgnoreCase);
+            }
+        }
+
         public IEnumerable<object> CurrentTiles =>
             CurrentFolders.Cast<object>()
                 .Concat(CurrentNpcs)
+                .Concat(CurrentCustomClothing)
+                .Concat(CurrentItems)
                 .Concat(CurrentQuests);
 
         public ICommand ToggleViewModeCommand { get; }
@@ -170,6 +218,8 @@ namespace Schedule1ModdingTool.ViewModels
             {
                 Project.Quests.CollectionChanged -= OnProjectQuestsChanged;
                 Project.Npcs.CollectionChanged -= OnProjectNpcsChanged;
+                Project.Items.CollectionChanged -= OnProjectItemsChanged;
+                Project.PhoneApps.CollectionChanged -= OnProjectPhoneAppsChanged;
                 Project.Folders.CollectionChanged -= OnProjectFoldersChanged;
                 foreach (var quest in _observedQuests.ToArray())
                 {
@@ -179,13 +229,25 @@ namespace Schedule1ModdingTool.ViewModels
                 {
                     npc.PropertyChanged -= BlueprintOnPropertyChanged;
                 }
+                foreach (var item in _observedItems.ToArray())
+                {
+                    item.PropertyChanged -= BlueprintOnPropertyChanged;
+                }
+                foreach (var phoneApp in _observedPhoneApps.ToArray())
+                {
+                    phoneApp.PropertyChanged -= BlueprintOnPropertyChanged;
+                }
                 _observedQuests.Clear();
                 _observedNpcs.Clear();
+                _observedItems.Clear();
+                _observedPhoneApps.Clear();
             }
 
             Project = project;
             Project.Quests.CollectionChanged += OnProjectQuestsChanged;
             Project.Npcs.CollectionChanged += OnProjectNpcsChanged;
+            Project.Items.CollectionChanged += OnProjectItemsChanged;
+            Project.PhoneApps.CollectionChanged += OnProjectPhoneAppsChanged;
             Project.Folders.CollectionChanged += OnProjectFoldersChanged;
 
             foreach (var quest in Project.Quests)
@@ -196,6 +258,16 @@ namespace Schedule1ModdingTool.ViewModels
             foreach (var npc in Project.Npcs)
             {
                 ObserveBlueprint(npc);
+            }
+
+            foreach (var item in Project.Items)
+            {
+                ObserveBlueprint(item);
+            }
+
+            foreach (var phoneApp in Project.PhoneApps)
+            {
+                ObserveBlueprint(phoneApp);
             }
 
             SelectedFolder = Project.GetFolderById(SelectedFolder?.Id ?? QuestProject.RootFolderId) ??
@@ -265,6 +337,33 @@ namespace Schedule1ModdingTool.ViewModels
             }
         }
 
+        public void UpdateItemCount(int count)
+        {
+            var itemCategory = Categories.FirstOrDefault(c => c.Category == ModCategory.Items);
+            if (itemCategory != null)
+            {
+                itemCategory.Count = count;
+            }
+        }
+
+        public void UpdateCustomClothingCount(int count)
+        {
+            var clothingCategory = Categories.FirstOrDefault(c => c.Category == ModCategory.CustomClothing);
+            if (clothingCategory != null)
+            {
+                clothingCategory.Count = count;
+            }
+        }
+
+        public void UpdatePhoneAppCount(int count)
+        {
+            var phoneAppCategory = Categories.FirstOrDefault(c => c.Category == ModCategory.PhoneApps);
+            if (phoneAppCategory != null)
+            {
+                phoneAppCategory.Count = count;
+            }
+        }
+
         private void InitializeCategories()
         {
             Categories.Add(new ModCategoryInfo
@@ -289,13 +388,13 @@ namespace Schedule1ModdingTool.ViewModels
 
             Categories.Add(new ModCategoryInfo
             {
-                Category = ModCategory.PhoneApps,
-                DisplayName = "Phone Apps",
-                IconKey = "PhoneAppsIcon",
-                Description = "Create custom phone applications",
-                IsEnabled = false,
+                Category = ModCategory.CustomClothing,
+                DisplayName = "Custom Clothing",
+                IconKey = "ItemsIcon",
+                Description = "Create custom S1API clothing items",
+                IsEnabled = true,
                 Count = 0,
-                ComingSoonText = "Coming Soon"
+                ComingSoonText = string.Empty
             });
 
             Categories.Add(new ModCategoryInfo
@@ -304,9 +403,9 @@ namespace Schedule1ModdingTool.ViewModels
                 DisplayName = "Items",
                 IconKey = "ItemsIcon",
                 Description = "Create custom items",
-                IsEnabled = false,
+                IsEnabled = true,
                 Count = 0,
-                ComingSoonText = "Coming Soon"
+                ComingSoonText = string.Empty
             });
         }
 
@@ -358,6 +457,54 @@ namespace Schedule1ModdingTool.ViewModels
             RaiseItemsChanged();
         }
 
+        private void OnProjectItemsChanged(object? sender, NotifyCollectionChangedEventArgs e)
+        {
+            if (e.NewItems != null)
+            {
+                foreach (var item in e.NewItems.OfType<ItemBlueprint>())
+                {
+                    ObserveBlueprint(item);
+                }
+            }
+
+            if (e.OldItems != null)
+            {
+                foreach (var item in e.OldItems.OfType<ItemBlueprint>())
+                {
+                    if (_observedItems.Remove(item))
+                    {
+                        item.PropertyChanged -= BlueprintOnPropertyChanged;
+                    }
+                }
+            }
+
+            RaiseItemsChanged();
+        }
+
+        private void OnProjectPhoneAppsChanged(object? sender, NotifyCollectionChangedEventArgs e)
+        {
+            if (e.NewItems != null)
+            {
+                foreach (var item in e.NewItems.OfType<PhoneAppBlueprint>())
+                {
+                    ObserveBlueprint(item);
+                }
+            }
+
+            if (e.OldItems != null)
+            {
+                foreach (var item in e.OldItems.OfType<PhoneAppBlueprint>())
+                {
+                    if (_observedPhoneApps.Remove(item))
+                    {
+                        item.PropertyChanged -= BlueprintOnPropertyChanged;
+                    }
+                }
+            }
+
+            RaiseItemsChanged();
+        }
+
         private void OnProjectFoldersChanged(object? sender, NotifyCollectionChangedEventArgs e)
         {
             if (Project == null)
@@ -378,7 +525,11 @@ namespace Schedule1ModdingTool.ViewModels
 
         private void BlueprintOnPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
         {
-            if (e.PropertyName == nameof(QuestBlueprint.FolderId) || e.PropertyName == nameof(NpcBlueprint.FolderId))
+            if (e.PropertyName == nameof(QuestBlueprint.FolderId) ||
+                e.PropertyName == nameof(NpcBlueprint.FolderId) ||
+                e.PropertyName == nameof(ItemBlueprint.FolderId) ||
+                e.PropertyName == nameof(ItemBlueprint.ItemType) ||
+                e.PropertyName == nameof(PhoneAppBlueprint.FolderId))
             {
                 RaiseItemsChanged();
             }
@@ -397,6 +548,22 @@ namespace Schedule1ModdingTool.ViewModels
             if (_observedNpcs.Add(npc))
             {
                 npc.PropertyChanged += BlueprintOnPropertyChanged;
+            }
+        }
+
+        private void ObserveBlueprint(ItemBlueprint item)
+        {
+            if (_observedItems.Add(item))
+            {
+                item.PropertyChanged += BlueprintOnPropertyChanged;
+            }
+        }
+
+        private void ObserveBlueprint(PhoneAppBlueprint phoneApp)
+        {
+            if (_observedPhoneApps.Add(phoneApp))
+            {
+                phoneApp.PropertyChanged += BlueprintOnPropertyChanged;
             }
         }
 
@@ -436,6 +603,8 @@ namespace Schedule1ModdingTool.ViewModels
             OnPropertyChanged(nameof(CurrentFolders));
             OnPropertyChanged(nameof(CurrentQuests));
             OnPropertyChanged(nameof(CurrentNpcs));
+            OnPropertyChanged(nameof(CurrentCustomClothing));
+            OnPropertyChanged(nameof(CurrentItems));
             OnPropertyChanged(nameof(CurrentTiles));
         }
 

@@ -11,6 +11,8 @@ namespace Schedule1ModdingTool.Utils
     {
         public DataTemplate? QuestTemplate { get; set; }
         public DataTemplate? NpcTemplate { get; set; }
+        public DataTemplate? ItemTemplate { get; set; }
+        public DataTemplate? PhoneAppTemplate { get; set; }
         public DataTemplate? WorkspaceTemplate { get; set; }
 
         public override DataTemplate? SelectTemplate(object item, DependencyObject container)
@@ -30,6 +32,16 @@ namespace Schedule1ModdingTool.Utils
                 if (tab.Npc != null && NpcTemplate != null)
                 {
                     return NpcTemplate;
+                }
+
+                if (tab.Item != null && ItemTemplate != null)
+                {
+                    return ItemTemplate;
+                }
+
+                if (tab.PhoneApp != null && PhoneAppTemplate != null)
+                {
+                    return PhoneAppTemplate;
                 }
             }
 

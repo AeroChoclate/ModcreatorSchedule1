@@ -46,9 +46,10 @@ namespace Schedule1ModdingTool.Services.CodeGeneration.Common
                 "System.Reflection",
                 "System.Linq",
                 "S1API.Quests",
+                "S1API.Quests.Identifiers",
                 "S1API.Quests.Constants",
                 "S1API.Saveables",
-                "S1API.Internal.Utils",
+                "S1API.Utils",
                 "S1API.Entities",
                 "S1API.GameTime",
                 "S1API.Console",
@@ -69,15 +70,65 @@ namespace Schedule1ModdingTool.Services.CodeGeneration.Common
         {
             return Add(
                 "System",
+                "System.Linq",
                 "S1API.Entities",
+                "S1API.Entities.Dialogue",
+                "S1API.Entities.Equippables",
                 "S1API.Entities.Schedule",
+                "S1API.Dialogues",
                 "S1API.GameTime",
                 "S1API.Economy",
+                "S1API.Casino",
+                "S1API.Messaging",
                 "S1API.Products",
                 "S1API.Properties",
                 "S1API.Map",
                 "S1API.Map.Buildings",
                 "UnityEngine"
+            );
+        }
+
+        /// <summary>
+        /// Adds standard using statements for item code generation.
+        /// Includes S1API.Items, S1API.Shops, icon utilities, and common System namespaces.
+        /// </summary>
+        public UsingStatementsBuilder AddItemUsings()
+        {
+            return Add(
+                "System",
+                "System.Collections.Generic",
+                "System.IO",
+                "System.Linq",
+                "System.Reflection",
+                "MelonLoader",
+                "S1API.Growing",
+                "S1API.Items",
+                "S1API.Rendering",
+                "S1API.Shops",
+                "S1API.Stations",
+                "S1API.Utils",
+                "UnityEngine"
+            );
+        }
+
+        /// <summary>
+        /// Adds standard using statements for phone app code generation.
+        /// Includes S1API phone UI helpers, Unity UI, and the Schedule I ExitAction type.
+        /// </summary>
+        public UsingStatementsBuilder AddPhoneAppUsings()
+        {
+            return Add(
+                "System",
+                "System.IO",
+                "System.Linq",
+                "System.Reflection",
+                "MelonLoader",
+                "S1API.PhoneApp",
+                "S1API.UI",
+                "S1API.Utils",
+                "ScheduleOne.DevUtilities",
+                "UnityEngine",
+                "UnityEngine.UI"
             );
         }
 
