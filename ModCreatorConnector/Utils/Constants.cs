@@ -10,8 +10,8 @@ namespace ModCreatorConnector.Utils
         /// Mod information
         /// </summary>
         public const string MOD_NAME = "ModCreatorConnector";
-        public const string MOD_VERSION = "1.0.0";
-        public const string MOD_AUTHOR = "Bars";
+        public const string MOD_VERSION = "1.0.2";
+        public const string MOD_AUTHOR = "Bars & Estonia";
         public const string MOD_DESCRIPTION = "Mod description...";
 
         /// <summary>

@@ -39,6 +39,7 @@ namespace Schedule1ModdingTool.Services
                 Directory.CreateDirectory(Path.Combine(modPath, "Quests"));
                 Directory.CreateDirectory(Path.Combine(modPath, "NPCs"));
                 Directory.CreateDirectory(Path.Combine(modPath, "Items"));
+                Directory.CreateDirectory(Path.Combine(modPath, "PhoneCalls"));
                 Directory.CreateDirectory(Path.Combine(modPath, "Utils"));
                 Directory.CreateDirectory(Path.Combine(modPath, "Resources"));
 
@@ -46,8 +47,17 @@ namespace Schedule1ModdingTool.Services
                 var firstQuest = project.Quests.FirstOrDefault();
                 var firstNpc = project.Npcs.FirstOrDefault();
                 var firstItem = project.Items.FirstOrDefault();
+                var firstPhoneCall = project.PhoneCalls.FirstOrDefault();
+                var firstPhoneApp = project.PhoneApps.FirstOrDefault();
                 var hasQuests = project.Quests != null && project.Quests.Any();
-                var discoveredNamespace = firstQuest?.Namespace ?? firstItem?.Namespace ?? firstNpc?.Namespace;
+                var hasPhoneCalls = project.PhoneCalls != null && project.PhoneCalls.Any();
+                var hasPhoneApps = project.PhoneApps != null && project.PhoneApps.Any();
+                if (hasPhoneApps)
+                {
+                    Directory.CreateDirectory(Path.Combine(modPath, "PhoneApps"));
+                }
+
+                var discoveredNamespace = firstQuest?.Namespace ?? firstItem?.Namespace ?? firstNpc?.Namespace ?? firstPhoneCall?.Namespace ?? firstPhoneApp?.Namespace;
                 
                 // Use project namespace if set, otherwise derive from first quest or project name
                 string rootNamespace;
@@ -64,13 +74,13 @@ namespace Schedule1ModdingTool.Services
                         : MakeSafeIdentifier(project.ProjectName, "GeneratedMod"));
                     rootNamespace = TrimElementSuffix(modNamespace);
                 }
-                var modAuthor = firstQuest?.ModAuthor ?? firstItem?.ModAuthor ?? firstNpc?.ModAuthor ?? settings?.DefaultModAuthor ?? "Quest Creator";
-                var modVersion = firstQuest?.ModVersion ?? firstItem?.ModVersion ?? firstNpc?.ModVersion ?? settings?.DefaultModVersion ?? "1.0.0";
-                var gameStudio = firstQuest?.GameDeveloper ?? firstItem?.GameDeveloper ?? firstNpc?.GameDeveloper ?? "TVGS";
-                var gameName = firstQuest?.GameName ?? firstItem?.GameName ?? firstNpc?.GameName ?? "Schedule I";
+                var modAuthor = firstQuest?.ModAuthor ?? firstItem?.ModAuthor ?? firstNpc?.ModAuthor ?? firstPhoneCall?.ModAuthor ?? firstPhoneApp?.ModAuthor ?? settings?.DefaultModAuthor ?? "Quest Creator";
+                var modVersion = firstQuest?.ModVersion ?? firstItem?.ModVersion ?? firstNpc?.ModVersion ?? firstPhoneCall?.ModVersion ?? firstPhoneApp?.ModVersion ?? settings?.DefaultModVersion ?? "1.0.0";
+                var gameStudio = firstQuest?.GameDeveloper ?? firstItem?.GameDeveloper ?? firstNpc?.GameDeveloper ?? firstPhoneCall?.GameDeveloper ?? firstPhoneApp?.GameDeveloper ?? "TVGS";
+                var gameName = firstQuest?.GameName ?? firstItem?.GameName ?? firstNpc?.GameName ?? firstPhoneCall?.GameName ?? firstPhoneApp?.GameName ?? "Schedule I";
 
                 // Generate .csproj file
-                GenerateCsprojFile(modPath, modName, project.Resources, result, settings, includePhoneApps: false);
+                GenerateCsprojFile(modPath, modName, project.Resources, result, settings, includePhoneCalls: hasPhoneCalls, includePhoneApps: hasPhoneApps);
 
                 // Generate .sln file
                 GenerateSolutionFile(modPath, modName, result);
@@ -102,6 +112,18 @@ namespace Schedule1ModdingTool.Services
                     GenerateItemHookFile(modPath, item, result);
                 }
 
+                foreach (var phoneCall in project.PhoneCalls ?? Enumerable.Empty<PhoneCallBlueprint>())
+                {
+                    GeneratePhoneCallFile(modPath, phoneCall, result);
+                    GeneratePhoneCallHookFile(modPath, phoneCall, result);
+                }
+
+                foreach (var phoneApp in project.PhoneApps ?? Enumerable.Empty<PhoneAppBlueprint>())
+                {
+                    GeneratePhoneAppFile(modPath, phoneApp, result);
+                    GeneratePhoneAppHookFile(modPath, phoneApp, result);
+                }
+
                 // Clean up old generated files that no longer match current NPCs/Quests
                 CleanupOldGeneratedFiles(modPath, project, result);
 
@@ -120,7 +142,7 @@ namespace Schedule1ModdingTool.Services
             return result;
         }
 
-        private void GenerateCsprojFile(string modPath, string modName, IEnumerable<ResourceAsset> resources, ModProjectGenerationResult result, ModSettings? settings = null, bool includePhoneApps = false)
+        private void GenerateCsprojFile(string modPath, string modName, IEnumerable<ResourceAsset> resources, ModProjectGenerationResult result, ModSettings? settings = null, bool includePhoneCalls = false, bool includePhoneApps = false)
         {
             var csprojPath = Path.Combine(modPath, $"{modName}.csproj");
             var sb = new StringBuilder();
@@ -229,6 +251,10 @@ namespace Schedule1ModdingTool.Services
             sb.AppendLine("    <Compile Include=\"Quests\\*.cs\" />");
             sb.AppendLine("    <Compile Include=\"NPCs\\*.cs\" />");
             sb.AppendLine("    <Compile Include=\"Items\\*.cs\" />");
+            if (includePhoneCalls)
+            {
+                sb.AppendLine("    <Compile Include=\"PhoneCalls\\*.cs\" />");
+            }
             if (includePhoneApps)
             {
                 sb.AppendLine("    <Compile Include=\"PhoneApps\\*.cs\" />");
@@ -334,18 +360,26 @@ namespace Schedule1ModdingTool.Services
         {
             var corePath = Path.Combine(modPath, "Core.cs");
             var sb = new StringBuilder();
+            var phoneCalls = project.PhoneCalls ?? Enumerable.Empty<PhoneCallBlueprint>();
             var hasQuests = project.Quests != null && project.Quests.Any();
             var hasItems = project.Items != null && project.Items.Any();
+            var hasPhoneCalls = phoneCalls.Any();
+            var hasPlayerSpawnPhoneCalls = phoneCalls.Any(call => call.QueueMode == PhoneCallQueueMode.OnLocalPlayerSpawned);
+            var hasMainScenePhoneCalls = phoneCalls.Any(call => call.QueueMode == PhoneCallQueueMode.OnMainSceneLoaded);
             sb.AppendLine("using System;");
             sb.AppendLine("using System.Collections;");
             sb.AppendLine("using System.Collections.Generic;");
             sb.AppendLine("using System.Linq;");
             sb.AppendLine("using System.Reflection;");
             sb.AppendLine("using MelonLoader;");
-            if (hasQuests)
+            if (hasQuests || hasPhoneCalls)
             {
                 sb.AppendLine("using S1API.Quests;");
                 sb.AppendLine("using S1API.Quests.Constants;");
+            }
+            if (hasPhoneCalls)
+            {
+                sb.AppendLine("using S1API.PhoneCalls;");
             }
             if (hasItems)
             {
@@ -353,6 +387,10 @@ namespace Schedule1ModdingTool.Services
             }
             sb.AppendLine("using S1API.Entities;");
             sb.AppendLine("using S1API.GameTime;");
+            if (hasPhoneCalls)
+            {
+                sb.AppendLine("using UnityEngine;");
+            }
             sb.AppendLine($"using {rootNamespace}.Utils;");
             if (hasQuests)
             {
@@ -361,6 +399,10 @@ namespace Schedule1ModdingTool.Services
             if (hasItems)
             {
                 sb.AppendLine($"using {rootNamespace}.Items;");
+            }
+            if (hasPhoneCalls)
+            {
+                sb.AppendLine($"using {rootNamespace}.PhoneCalls;");
             }
             sb.AppendLine();
             sb.AppendLine($"[assembly: MelonInfo(typeof({rootNamespace}.Core), Constants.MOD_NAME, Constants.MOD_VERSION, Constants.MOD_AUTHOR)]");
@@ -373,17 +415,27 @@ namespace Schedule1ModdingTool.Services
             sb.AppendLine("        public static Core? Instance { get; private set; }");
             sb.AppendLine();
 
-            if (hasQuests)
+            if (hasQuests || hasPhoneCalls)
             {
                 sb.AppendLine("        private readonly Dictionary<string, Quest> _registeredQuests = new Dictionary<string, Quest>();");
-                sb.AppendLine("        private bool _questsRegistered;");
+                if (hasQuests)
+                {
+                    sb.AppendLine("        private bool _questsRegistered;");
+                }
+                sb.AppendLine();
+            }
+
+            if (hasPhoneCalls)
+            {
+                sb.AppendLine("        private bool _mainScenePhoneCallsQueued;");
+                sb.AppendLine("        private bool _playerSpawnPhoneCallsQueued;");
                 sb.AppendLine();
             }
 
             sb.AppendLine("        public override void OnLateInitializeMelon()");
             sb.AppendLine("        {");
             sb.AppendLine("            Instance = this;");
-            if (hasQuests)
+            if (hasQuests || hasPlayerSpawnPhoneCalls)
             {
                 sb.AppendLine("            Player.LocalPlayerSpawned += HandleLocalPlayerSpawned;");
             }
@@ -411,7 +463,7 @@ namespace Schedule1ModdingTool.Services
                 sb.AppendLine();
             }
 
-            if (hasItems || hasQuests)
+            if (hasItems || hasQuests || hasMainScenePhoneCalls)
             {
                 sb.AppendLine("        public override void OnSceneWasInitialized(int buildIndex, string sceneName)");
                 sb.AppendLine("        {");
@@ -425,29 +477,68 @@ namespace Schedule1ModdingTool.Services
                 {
                     sb.AppendLine("                _questsRegistered = false;");
                 }
+                if (hasPhoneCalls)
+                {
+                    sb.AppendLine("                _mainScenePhoneCallsQueued = false;");
+                    sb.AppendLine("                _playerSpawnPhoneCallsQueued = false;");
+                }
+                if (hasMainScenePhoneCalls)
+                {
+                    sb.AppendLine("                MelonCoroutines.Start(QueueMainScenePhoneCalls());");
+                }
                 sb.AppendLine("            }");
+                sb.AppendLine("        }");
+                sb.AppendLine();
+            }
+
+            if (hasQuests || hasPhoneCalls)
+            {
+                sb.AppendLine("        public override void OnSceneWasUnloaded(int buildIndex, string sceneName)");
+                sb.AppendLine("        {");
+                sb.AppendLine("            if (string.Equals(sceneName, \"Main\", StringComparison.OrdinalIgnoreCase))");
+                sb.AppendLine("            {");
+                if (hasQuests)
+                {
+                    sb.AppendLine("                _questsRegistered = false;");
+                }
+                if (hasPhoneCalls)
+                {
+                    sb.AppendLine("                _mainScenePhoneCallsQueued = false;");
+                    sb.AppendLine("                _playerSpawnPhoneCallsQueued = false;");
+                }
+                sb.AppendLine("            }");
+                sb.AppendLine("        }");
+                sb.AppendLine();
+            }
+
+            if (hasQuests || hasPlayerSpawnPhoneCalls)
+            {
+                sb.AppendLine("        private void HandleLocalPlayerSpawned(Player player)");
+                sb.AppendLine("        {");
+                if (hasQuests)
+                {
+                    sb.AppendLine("            if (!_questsRegistered)");
+                    sb.AppendLine("            {");
+                    sb.AppendLine("                MelonCoroutines.Start(DelayedQuestRegistration());");
+                    sb.AppendLine("            }");
+                    if (hasPlayerSpawnPhoneCalls)
+                    {
+                        sb.AppendLine();
+                    }
+                }
+                if (hasPlayerSpawnPhoneCalls)
+                {
+                    sb.AppendLine("            if (!_playerSpawnPhoneCallsQueued)");
+                    sb.AppendLine("            {");
+                    sb.AppendLine("                MelonCoroutines.Start(QueuePlayerSpawnPhoneCalls());");
+                    sb.AppendLine("            }");
+                }
                 sb.AppendLine("        }");
                 sb.AppendLine();
             }
 
             if (hasQuests)
             {
-                sb.AppendLine("        public override void OnSceneWasUnloaded(int buildIndex, string sceneName)");
-                sb.AppendLine("        {");
-                sb.AppendLine("            if (string.Equals(sceneName, \"Main\", StringComparison.OrdinalIgnoreCase))");
-                sb.AppendLine("            {");
-                sb.AppendLine("                _questsRegistered = false;");
-                sb.AppendLine("            }");
-                sb.AppendLine("        }");
-                sb.AppendLine();
-                sb.AppendLine("        private void HandleLocalPlayerSpawned(Player player)");
-                sb.AppendLine("        {");
-                sb.AppendLine("            if (_questsRegistered)");
-                sb.AppendLine("                return;");
-                sb.AppendLine();
-                sb.AppendLine("            MelonCoroutines.Start(DelayedQuestRegistration());");
-                sb.AppendLine("        }");
-                sb.AppendLine();
                 sb.AppendLine("        private System.Collections.IEnumerator DelayedQuestRegistration()");
                 sb.AppendLine("        {");
                 sb.AppendLine("            if (_questsRegistered)");
@@ -463,9 +554,21 @@ namespace Schedule1ModdingTool.Services
                 sb.AppendLine();
             }
 
+            if (hasMainScenePhoneCalls)
+            {
+                AppendPhoneCallQueueCoroutine(sb, "QueueMainScenePhoneCalls", "_mainScenePhoneCallsQueued", phoneCalls.Where(call => call.QueueMode == PhoneCallQueueMode.OnMainSceneLoaded));
+                sb.AppendLine();
+            }
+
+            if (hasPlayerSpawnPhoneCalls)
+            {
+                AppendPhoneCallQueueCoroutine(sb, "QueuePlayerSpawnPhoneCalls", "_playerSpawnPhoneCallsQueued", phoneCalls.Where(call => call.QueueMode == PhoneCallQueueMode.OnLocalPlayerSpawned), waitTwoFrames: true);
+                sb.AppendLine();
+            }
+
             sb.AppendLine("        public override void OnApplicationQuit()");
             sb.AppendLine("        {");
-            if (hasQuests)
+            if (hasQuests || hasPlayerSpawnPhoneCalls)
             {
                 sb.AppendLine("            Player.LocalPlayerSpawned -= HandleLocalPlayerSpawned;");
             }
@@ -526,14 +629,6 @@ namespace Schedule1ModdingTool.Services
 
                 sb.AppendLine("        }");
                 sb.AppendLine();
-                sb.AppendLine("        public static Quest? GetRegisteredQuest(string questId)");
-                sb.AppendLine("        {");
-                sb.AppendLine("            if (Instance == null || string.IsNullOrWhiteSpace(questId))");
-                sb.AppendLine("                return null;");
-                sb.AppendLine();
-                sb.AppendLine("            return Instance._registeredQuests.TryGetValue(questId, out var quest) ? quest : null;");
-                sb.AppendLine("        }");
-                sb.AppendLine();
                 sb.AppendLine("        private void SubscribeToNPCEvents()");
                 sb.AppendLine("        {");
                 sb.AppendLine("            // NPC event triggers are handled in individual quest classes via SubscribeToTriggers()");
@@ -576,6 +671,23 @@ namespace Schedule1ModdingTool.Services
                 }
 
                 sb.AppendLine("        }");
+            }
+
+            if (hasQuests || hasPhoneCalls)
+            {
+                sb.AppendLine("        public static Quest? GetRegisteredQuest(string questId)");
+                sb.AppendLine("        {");
+                sb.AppendLine("            if (Instance == null || string.IsNullOrWhiteSpace(questId))");
+                sb.AppendLine("                return null;");
+                sb.AppendLine();
+                sb.AppendLine("            return Instance._registeredQuests.TryGetValue(questId, out var quest) ? quest : null;");
+                sb.AppendLine("        }");
+                sb.AppendLine();
+            }
+
+            if (hasPhoneCalls)
+            {
+                AppendPhoneCallFactoryMethods(sb, project);
             }
 
             sb.AppendLine("    }");
@@ -785,6 +897,56 @@ namespace Schedule1ModdingTool.Services
             }
         }
 
+        private void GeneratePhoneCallFile(string modPath, PhoneCallBlueprint phoneCall, ModProjectGenerationResult result)
+        {
+            var phoneCallCode = _codeGenService.GeneratePhoneCallCode(phoneCall);
+            var className = MakeSafeIdentifier(phoneCall.ClassName, "GeneratedPhoneCall");
+            var phoneCallPath = Path.Combine(modPath, "PhoneCalls", $"{className}.cs");
+
+            File.WriteAllText(phoneCallPath, phoneCallCode);
+            result.GeneratedFiles.Add(phoneCallPath);
+        }
+
+        private void GeneratePhoneCallHookFile(string modPath, PhoneCallBlueprint phoneCall, ModProjectGenerationResult result)
+        {
+            if (!phoneCall.GenerateHookScaffold)
+            {
+                return;
+            }
+
+            var className = MakeSafeIdentifier(phoneCall.ClassName, "GeneratedPhoneCall");
+            var targetNamespace = CodeGeneration.Common.NamespaceNormalizer.NormalizeForPhoneCall(phoneCall.Namespace);
+            var hookPath = Path.Combine(modPath, "PhoneCalls", $"{className}.Hooks.cs");
+            var sb = new StringBuilder();
+
+            sb.AppendLine("using S1API.Conditions;");
+            sb.AppendLine("using S1API.PhoneCalls;");
+            sb.AppendLine();
+            sb.AppendLine($"namespace {targetNamespace}");
+            sb.AppendLine("{");
+            sb.AppendLine($"    public partial class {className}");
+            sb.AppendLine("    {");
+            sb.AppendLine("        partial void ConfigureGeneratedCall()");
+            sb.AppendLine("        {");
+            sb.AppendLine("        }");
+            sb.AppendLine();
+            sb.AppendLine("        partial void OnGeneratedStageBuilt(string stageKey, CallStageEntry stage)");
+            sb.AppendLine("        {");
+            sb.AppendLine("        }");
+            sb.AppendLine();
+            sb.AppendLine("        partial void OnGeneratedTriggerBuilt(string stageKey, string triggerPhase, int triggerIndex, SystemTriggerEntry trigger)");
+            sb.AppendLine("        {");
+            sb.AppendLine("        }");
+            sb.AppendLine("    }");
+            sb.AppendLine("}");
+
+            if (!File.Exists(hookPath))
+            {
+                File.WriteAllText(hookPath, sb.ToString());
+                result.GeneratedFiles.Add(hookPath);
+            }
+        }
+
         private void GeneratePhoneAppFile(string modPath, PhoneAppBlueprint phoneApp, ModProjectGenerationResult result)
         {
             var phoneAppCode = _codeGenService.GeneratePhoneAppCode(phoneApp);
@@ -805,6 +967,7 @@ namespace Schedule1ModdingTool.Services
             var className = MakeSafeIdentifier(phoneApp.ClassName, "GeneratedPhoneApp");
             var targetNamespace = CodeGeneration.Common.NamespaceNormalizer.NormalizeForPhoneApp(phoneApp.Namespace);
             var hookPath = Path.Combine(modPath, "PhoneApps", $"{className}.Hooks.cs");
+            var customButtons = CollectPhoneAppButtonNodes(phoneApp.UiNodes);
             var sb = new StringBuilder();
 
             sb.AppendLine("using ScheduleOne.DevUtilities;");
@@ -840,6 +1003,17 @@ namespace Schedule1ModdingTool.Services
             sb.AppendLine();
             sb.AppendLine("        partial void OnCustomButtonPressedGenerated(string nodeId)");
             sb.AppendLine("        {");
+            if (customButtons.Count > 0)
+            {
+                sb.AppendLine("            switch (nodeId)");
+                sb.AppendLine("            {");
+                foreach (var button in customButtons)
+                {
+                    sb.AppendLine($"                case \"{EscapeString(button.NodeId)}\": // {EscapeString(button.ButtonLabel)}");
+                    sb.AppendLine("                    break;");
+                }
+                sb.AppendLine("            }");
+            }
             sb.AppendLine("        }");
             sb.AppendLine("    }");
             sb.AppendLine("}");
@@ -849,6 +1023,100 @@ namespace Schedule1ModdingTool.Services
                 File.WriteAllText(hookPath, sb.ToString());
                 result.GeneratedFiles.Add(hookPath);
             }
+        }
+
+        private static List<(string NodeId, string ButtonLabel)> CollectPhoneAppButtonNodes(IEnumerable<PhoneAppUiNodeBlueprint> nodes)
+        {
+            var results = new List<(string NodeId, string ButtonLabel)>();
+            CollectPhoneAppButtonNodesRecursive(nodes, results);
+            return results;
+        }
+
+        private static void CollectPhoneAppButtonNodesRecursive(
+            IEnumerable<PhoneAppUiNodeBlueprint> nodes,
+            ICollection<(string NodeId, string ButtonLabel)> results)
+        {
+            foreach (var node in nodes)
+            {
+                if (node.NodeType == PhoneAppUiNodeType.Button && !string.IsNullOrWhiteSpace(node.Id))
+                {
+                    var label = string.IsNullOrWhiteSpace(node.Text) ? node.Name : node.Text;
+                    results.Add((node.Id, label));
+                }
+
+                if (node.Children.Count > 0)
+                {
+                    CollectPhoneAppButtonNodesRecursive(node.Children, results);
+                }
+            }
+        }
+
+        private static void AppendPhoneCallQueueCoroutine(
+            StringBuilder sb,
+            string methodName,
+            string queuedFlagName,
+            IEnumerable<PhoneCallBlueprint> phoneCalls,
+            bool waitTwoFrames = false)
+        {
+            sb.AppendLine($"        private System.Collections.IEnumerator {methodName}()");
+            sb.AppendLine("        {");
+            sb.AppendLine($"            if ({queuedFlagName})");
+            sb.AppendLine("                yield break;");
+            sb.AppendLine();
+            sb.AppendLine($"            {queuedFlagName} = true;");
+            if (waitTwoFrames)
+            {
+                sb.AppendLine("            yield return null;");
+                sb.AppendLine("            yield return null;");
+            }
+            else
+            {
+                sb.AppendLine("            yield return null;");
+            }
+            sb.AppendLine();
+
+            foreach (var phoneCall in phoneCalls)
+            {
+                var escapedCallId = EscapeString(phoneCall.CallId);
+                var delay = Math.Max(0d, phoneCall.QueueDelaySeconds);
+                if (delay > 0d)
+                {
+                    sb.AppendLine($"            yield return new WaitForSeconds({delay.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture)}f);");
+                }
+                sb.AppendLine($"            QueueGeneratedPhoneCall(\"{escapedCallId}\");");
+            }
+
+            sb.AppendLine("        }");
+        }
+
+        private static void AppendPhoneCallFactoryMethods(StringBuilder sb, QuestProject project)
+        {
+            sb.AppendLine("        public static bool QueueGeneratedPhoneCall(string callId)");
+            sb.AppendLine("        {");
+            sb.AppendLine("            var call = CreateGeneratedPhoneCall(callId);");
+            sb.AppendLine("            if (call == null)");
+            sb.AppendLine("                return false;");
+            sb.AppendLine();
+            sb.AppendLine("            CallManager.QueueCall(call);");
+            sb.AppendLine("            return true;");
+            sb.AppendLine("        }");
+            sb.AppendLine();
+            sb.AppendLine("        public static PhoneCallDefinition? CreateGeneratedPhoneCall(string callId)");
+            sb.AppendLine("        {");
+            sb.AppendLine("            if (string.IsNullOrWhiteSpace(callId))");
+            sb.AppendLine("                return null;");
+            sb.AppendLine();
+            sb.AppendLine("            return callId switch");
+            sb.AppendLine("            {");
+            foreach (var phoneCall in project.PhoneCalls)
+            {
+                var className = MakeSafeIdentifier(phoneCall.ClassName, "GeneratedPhoneCall");
+                sb.AppendLine($"                \"{EscapeString(phoneCall.CallId)}\" => new {className}(),");
+            }
+            sb.AppendLine("                _ => null");
+            sb.AppendLine("            };");
+            sb.AppendLine("        }");
+            sb.AppendLine();
         }
 
         /// <summary>
@@ -863,6 +1131,7 @@ namespace Schedule1ModdingTool.Services
                 var expectedNpcFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 var expectedQuestFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 var expectedItemFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                var expectedPhoneCallFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 var expectedPhoneAppFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
                 foreach (var npc in project.Npcs)
@@ -895,108 +1164,63 @@ namespace Schedule1ModdingTool.Services
                     }
                 }
 
-                // Clean up NPC files
-                var npcsDir = Path.Combine(modPath, "NPCs");
-                if (Directory.Exists(npcsDir))
+                foreach (var phoneApp in project.PhoneApps)
                 {
-                    var existingNpcFiles = Directory.GetFiles(npcsDir, "*.cs");
-                    foreach (var filePath in existingNpcFiles)
+                    var className = MakeSafeIdentifier(phoneApp.ClassName, "GeneratedPhoneApp");
+                    expectedPhoneAppFiles.Add($"{className}.cs");
+                    if (phoneApp.GenerateHookScaffold)
                     {
-                        var fileName = Path.GetFileName(filePath);
-                        if (!expectedNpcFiles.Contains(fileName))
-                        {
-                            try
-                            {
-                                File.Delete(filePath);
-                                Debug.WriteLine($"[ModProjectGenerator] Deleted old NPC file: {fileName}");
-                                result.Warnings.Add($"Removed old NPC file: {fileName}");
-                            }
-                            catch (Exception ex)
-                            {
-                                Debug.WriteLine($"[ModProjectGenerator] Failed to delete old NPC file '{fileName}': {ex.Message}");
-                                result.Warnings.Add($"Could not remove old NPC file '{fileName}': {ex.Message}");
-                            }
-                        }
+                        expectedPhoneAppFiles.Add($"{className}.Hooks.cs");
                     }
                 }
 
-                // Clean up Quest files
-                var questsDir = Path.Combine(modPath, "Quests");
-                if (Directory.Exists(questsDir))
+                foreach (var phoneCall in project.PhoneCalls)
                 {
-                    var existingQuestFiles = Directory.GetFiles(questsDir, "*.cs");
-                    foreach (var filePath in existingQuestFiles)
+                    var className = MakeSafeIdentifier(phoneCall.ClassName, "GeneratedPhoneCall");
+                    expectedPhoneCallFiles.Add($"{className}.cs");
+                    if (phoneCall.GenerateHookScaffold)
                     {
-                        var fileName = Path.GetFileName(filePath);
-                        if (!expectedQuestFiles.Contains(fileName))
-                        {
-                            try
-                            {
-                                File.Delete(filePath);
-                                Debug.WriteLine($"[ModProjectGenerator] Deleted old Quest file: {fileName}");
-                                result.Warnings.Add($"Removed old Quest file: {fileName}");
-                            }
-                            catch (Exception ex)
-                            {
-                                Debug.WriteLine($"[ModProjectGenerator] Failed to delete old Quest file '{fileName}': {ex.Message}");
-                                result.Warnings.Add($"Could not remove old Quest file '{fileName}': {ex.Message}");
-                            }
-                        }
+                        expectedPhoneCallFiles.Add($"{className}.Hooks.cs");
                     }
                 }
 
-                var itemsDir = Path.Combine(modPath, "Items");
-                if (Directory.Exists(itemsDir))
-                {
-                    var existingItemFiles = Directory.GetFiles(itemsDir, "*.cs");
-                    foreach (var filePath in existingItemFiles)
-                    {
-                        var fileName = Path.GetFileName(filePath);
-                        if (!expectedItemFiles.Contains(fileName))
-                        {
-                            try
-                            {
-                                File.Delete(filePath);
-                                Debug.WriteLine($"[ModProjectGenerator] Deleted old Item file: {fileName}");
-                                result.Warnings.Add($"Removed old Item file: {fileName}");
-                            }
-                            catch (Exception ex)
-                            {
-                                Debug.WriteLine($"[ModProjectGenerator] Failed to delete old Item file '{fileName}': {ex.Message}");
-                                result.Warnings.Add($"Could not remove old Item file '{fileName}': {ex.Message}");
-                            }
-                        }
-                    }
-                }
-
-                var phoneAppsDir = Path.Combine(modPath, "PhoneApps");
-                if (Directory.Exists(phoneAppsDir))
-                {
-                    var existingPhoneAppFiles = Directory.GetFiles(phoneAppsDir, "*.cs");
-                    foreach (var filePath in existingPhoneAppFiles)
-                    {
-                        var fileName = Path.GetFileName(filePath);
-                        if (!expectedPhoneAppFiles.Contains(fileName))
-                        {
-                            try
-                            {
-                                File.Delete(filePath);
-                                Debug.WriteLine($"[ModProjectGenerator] Deleted old Phone App file: {fileName}");
-                                result.Warnings.Add($"Removed old Phone App file: {fileName}");
-                            }
-                            catch (Exception ex)
-                            {
-                                Debug.WriteLine($"[ModProjectGenerator] Failed to delete old Phone App file '{fileName}': {ex.Message}");
-                                result.Warnings.Add($"Could not remove old Phone App file '{fileName}': {ex.Message}");
-                            }
-                        }
-                    }
-                }
+                CleanupGeneratedFiles(Path.Combine(modPath, "NPCs"), expectedNpcFiles, "NPC", result);
+                CleanupGeneratedFiles(Path.Combine(modPath, "Quests"), expectedQuestFiles, "Quest", result);
+                CleanupGeneratedFiles(Path.Combine(modPath, "Items"), expectedItemFiles, "Item", result);
+                CleanupGeneratedFiles(Path.Combine(modPath, "PhoneCalls"), expectedPhoneCallFiles, "Phone Call", result);
+                CleanupGeneratedFiles(Path.Combine(modPath, "PhoneApps"), expectedPhoneAppFiles, "Phone App", result);
             }
             catch (Exception ex)
             {
                 Debug.WriteLine($"[ModProjectGenerator] Error during cleanup of old files: {ex.Message}");
                 result.Warnings.Add($"Error cleaning up old generated files: {ex.Message}");
+            }
+        }
+
+        private static void CleanupGeneratedFiles(string directory, HashSet<string> expectedFiles, string fileCategory, ModProjectGenerationResult result)
+        {
+            if (!Directory.Exists(directory))
+            {
+                return;
+            }
+
+            foreach (var filePath in Directory.GetFiles(directory, "*.cs"))
+            {
+                var fileName = Path.GetFileName(filePath);
+                if (expectedFiles.Contains(fileName))
+                {
+                    continue;
+                }
+
+                if (RetryingFileOperations.TryDeleteFile(filePath, out var deleteError, maxRetries: 3))
+                {
+                    Debug.WriteLine($"[ModProjectGenerator] Deleted old {fileCategory} file: {fileName}");
+                    result.Warnings.Add($"Removed old {fileCategory} file: {fileName}");
+                    continue;
+                }
+
+                Debug.WriteLine($"[ModProjectGenerator] Failed to delete old {fileCategory} file '{fileName}': {deleteError}");
+                result.Warnings.Add($"Could not remove old {fileCategory} file '{fileName}': {deleteError}");
             }
         }
 
@@ -1095,76 +1319,16 @@ namespace Schedule1ModdingTool.Services
                 }
 
                 Debug.WriteLine($"[ModProjectGenerator] Copying '{sourceFullPath}' -> '{destinationFullPath}'");
-                if (!TryCopyFileWithRetry(sourceFullPath, destinationFullPath, result, relative))
+                if (!RetryingFileOperations.TryCopyFile(sourceFullPath, destinationFullPath, out var copyError, maxRetries: 3))
                 {
-                    result.Errors.Add($"Failed to copy resource after retries: {relative}. The file may be locked by another process. Please close any applications using this file and try again.");
+                    Debug.WriteLine($"[ModProjectGenerator] Copy failed for '{relative}': {copyError}");
+                    result.Errors.Add($"Failed to copy resource {relative}: {copyError}");
                 }
                 else
                 {
                     result.GeneratedFiles.Add(destinationFullPath);
                 }
             }
-        }
-
-        private static bool TryCopyFileWithRetry(string source, string destination, ModProjectGenerationResult result, string relativePath, int maxRetries = 3)
-        {
-            for (int attempt = 1; attempt <= maxRetries; attempt++)
-            {
-                try
-                {
-                    Debug.WriteLine($"[ModProjectGenerator] Resource copy attempt {attempt}/{maxRetries}: '{source}' -> '{destination}'");
-                    // If destination exists and is locked, try to delete it first
-                    if (File.Exists(destination))
-                    {
-                        try
-                        {
-                            File.Delete(destination);
-                            Debug.WriteLine($"[ModProjectGenerator] Destination delete failed (attempt {attempt}): {destination}");
-                        }
-                        catch (IOException)
-                        {
-                            // Destination file is locked, wait and retry
-                            if (attempt < maxRetries)
-                            {
-                                Thread.Sleep(100 * attempt); // Exponential backoff: 100ms, 200ms, 300ms
-                                continue;
-                            }
-                            return false;
-                        }
-                    }
-
-                    // Use FileStream with FileShare.ReadWrite to allow reading even if file is open elsewhere
-                    // This allows copying files that might be open in Explorer preview or image viewers
-                    using (var sourceStream = new FileStream(source, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
-                    using (var destStream = new FileStream(destination, FileMode.Create, FileAccess.Write, FileShare.None))
-                    {
-                        sourceStream.CopyTo(destStream);
-                    }
-                    Debug.WriteLine($"[ModProjectGenerator] Copy succeeded: '{destination}'");
-                    return true;
-                }
-                catch (IOException ex) when (ex.Message.Contains("being used by another process") || ex.Message.Contains("cannot access"))
-                {
-                    if (attempt < maxRetries)
-                    {
-                        Debug.WriteLine($"[ModProjectGenerator] Resource locked (attempt {attempt}): {relativePath} - {ex.Message}");
-                        result.Errors.Add($"Resource file locked (attempt {attempt}/{maxRetries}): {relativePath}. Retrying...");
-                        Thread.Sleep(100 * attempt); // Exponential backoff: 100ms, 200ms, 300ms
-                        continue;
-                    }
-                    Debug.WriteLine($"[ModProjectGenerator] Resource locked after {maxRetries} attempts: {relativePath}");
-                    result.Errors.Add($"Resource file locked after {maxRetries} attempts: {relativePath}");
-                    return false;
-                }
-                catch (Exception ex)
-                {
-                    Debug.WriteLine($"[ModProjectGenerator] Copy failed for '{relativePath}': {ex.Message}");
-                    result.Errors.Add($"Error copying resource {relativePath}: {ex.Message}");
-                    return false;
-                }
-            }
-
-            return false;
         }
 
         private static string TrimElementSuffix(string namespaceValue)
@@ -1174,7 +1338,7 @@ namespace Schedule1ModdingTool.Services
                 return "GeneratedMod";
             }
 
-            var suffixes = new[] { ".Quests", ".NPCs", ".Items", ".PhoneApps" };
+            var suffixes = new[] { ".Quests", ".NPCs", ".Items", ".PhoneCalls", ".PhoneApps" };
             foreach (var suffix in suffixes)
             {
                 if (namespaceValue.EndsWith(suffix, StringComparison.Ordinal))

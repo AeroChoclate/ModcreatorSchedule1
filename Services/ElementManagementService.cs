@@ -8,7 +8,7 @@ using Schedule1ModdingTool.ViewModels;
 namespace Schedule1ModdingTool.Services
 {
     /// <summary>
-    /// Manages CRUD operations for quests, NPCs, items, phone apps, and folders.
+    /// Manages CRUD operations for quests, NPCs, items, phone calls, phone apps, and folders.
     /// </summary>
     public class ElementManagementService
     {
@@ -263,10 +263,20 @@ namespace Schedule1ModdingTool.Services
             var projectNamespace = !string.IsNullOrWhiteSpace(project.ProjectNamespace)
                 ? project.ProjectNamespace
                 : settings.DefaultModNamespace;
-            var phoneApp = template?.DeepCopy() ?? new PhoneAppBlueprint();
-            phoneApp.ClassName = $"PhoneApp{project.PhoneApps.Count + 1}";
-            phoneApp.AppName = $"phone_app_{project.PhoneApps.Count + 1}";
-            phoneApp.AppTitle = $"New Phone App {project.PhoneApps.Count + 1}";
+            var phoneApp = template?.DeepCopy(preserveNodeIdentities: true) ?? new PhoneAppBlueprint();
+            var defaultIndex = project.PhoneApps.Count + 1;
+            var baseClassName = string.IsNullOrWhiteSpace(phoneApp.ClassName)
+                ? $"PhoneApp{defaultIndex}"
+                : phoneApp.ClassName;
+            var baseAppName = string.IsNullOrWhiteSpace(phoneApp.AppName)
+                ? $"phone_app_{defaultIndex}"
+                : phoneApp.AppName;
+
+            phoneApp.ClassName = MakeUniquePhoneAppClassName(project, baseClassName);
+            phoneApp.AppName = MakeUniquePhoneAppName(project, baseAppName);
+            phoneApp.AppTitle = string.IsNullOrWhiteSpace(phoneApp.AppTitle)
+                ? $"New Phone App {defaultIndex}"
+                : phoneApp.AppTitle;
             phoneApp.Namespace = $"{projectNamespace}.PhoneApps";
             phoneApp.ModName = string.IsNullOrWhiteSpace(project.ProjectName) ? phoneApp.ModName : project.ProjectName;
             phoneApp.ModAuthor = settings.DefaultModAuthor;
@@ -306,15 +316,138 @@ namespace Schedule1ModdingTool.Services
         {
             if (phoneApp == null) return null;
 
-            var duplicate = phoneApp.DeepCopy();
-            duplicate.ClassName = $"{duplicate.ClassName}Copy";
-            duplicate.AppName = $"{duplicate.AppName}_copy";
+            var duplicate = phoneApp.DeepCopy(preserveNodeIdentities: true);
+            duplicate.ClassName = MakeUniquePhoneAppClassName(project, $"{duplicate.ClassName}Copy");
+            duplicate.AppName = MakeUniquePhoneAppName(project, $"{duplicate.AppName}_copy");
             duplicate.AppTitle = $"{duplicate.AppTitle} (Copy)";
             duplicate.FolderId = phoneApp.FolderId;
 
             project.AddPhoneApp(duplicate);
             _workspaceViewModel.UpdatePhoneAppCount(project.PhoneApps.Count);
             return duplicate;
+        }
+
+        /// <summary>
+        /// Adds a new phone call to the project based on a template.
+        /// </summary>
+        public PhoneCallBlueprint AddPhoneCall(QuestProject project, PhoneCallBlueprint? template)
+        {
+            var settings = ModSettings.Load();
+            var projectNamespace = !string.IsNullOrWhiteSpace(project.ProjectNamespace)
+                ? project.ProjectNamespace
+                : settings.DefaultModNamespace;
+            var phoneCall = template?.DeepCopy() ?? new PhoneCallBlueprint();
+            var defaultIndex = project.PhoneCalls.Count + 1;
+            var baseClassName = string.IsNullOrWhiteSpace(phoneCall.ClassName)
+                ? $"PhoneCall{defaultIndex}"
+                : phoneCall.ClassName;
+            var baseCallId = string.IsNullOrWhiteSpace(phoneCall.CallId)
+                ? $"phone_call_{defaultIndex}"
+                : phoneCall.CallId;
+
+            phoneCall.ClassName = MakeUniquePhoneCallClassName(project, baseClassName);
+            phoneCall.CallId = MakeUniquePhoneCallId(project, baseCallId);
+            phoneCall.CallTitle = string.IsNullOrWhiteSpace(phoneCall.CallTitle)
+                ? $"New Phone Call {defaultIndex}"
+                : phoneCall.CallTitle;
+            phoneCall.Namespace = $"{projectNamespace}.PhoneCalls";
+            phoneCall.ModName = string.IsNullOrWhiteSpace(project.ProjectName) ? phoneCall.ModName : project.ProjectName;
+            phoneCall.ModAuthor = settings.DefaultModAuthor;
+            phoneCall.ModVersion = settings.DefaultModVersion;
+            phoneCall.FolderId = _workspaceViewModel.SelectedFolder?.Id ?? QuestProject.RootFolderId;
+
+            project.AddPhoneCall(phoneCall);
+            _workspaceViewModel.UpdatePhoneCallCount(project.PhoneCalls.Count);
+            return phoneCall;
+        }
+
+        /// <summary>
+        /// Removes a phone call from the project after confirmation.
+        /// </summary>
+        public bool RemovePhoneCall(QuestProject project, PhoneCallBlueprint phoneCall)
+        {
+            if (phoneCall == null) return false;
+
+            var result = MessageBox.Show($"Are you sure you want to remove '{phoneCall.DisplayName}'?",
+                "Remove Phone Call", MessageBoxButton.YesNo, MessageBoxImage.Question);
+
+            if (result == MessageBoxResult.Yes)
+            {
+                DeleteGeneratedPhoneCallFile(project, phoneCall);
+                project.RemovePhoneCall(phoneCall);
+                _workspaceViewModel.UpdatePhoneCallCount(project.PhoneCalls.Count);
+                return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Duplicates an existing phone call.
+        /// </summary>
+        public PhoneCallBlueprint? DuplicatePhoneCall(QuestProject project, PhoneCallBlueprint? phoneCall)
+        {
+            if (phoneCall == null) return null;
+
+            var duplicate = phoneCall.DeepCopy();
+            duplicate.ClassName = MakeUniquePhoneCallClassName(project, $"{duplicate.ClassName}Copy");
+            duplicate.CallId = MakeUniquePhoneCallId(project, $"{duplicate.CallId}_copy");
+            duplicate.CallTitle = $"{duplicate.CallTitle} (Copy)";
+            duplicate.FolderId = phoneCall.FolderId;
+
+            project.AddPhoneCall(duplicate);
+            _workspaceViewModel.UpdatePhoneCallCount(project.PhoneCalls.Count);
+            return duplicate;
+        }
+
+        private static string MakeUniquePhoneAppClassName(QuestProject project, string baseClassName)
+        {
+            return MakeUniqueValue(
+                project.PhoneApps.Select(app => app.ClassName),
+                baseClassName,
+                suffixFormatter: index => $"{baseClassName}{index}");
+        }
+
+        private static string MakeUniquePhoneAppName(QuestProject project, string baseAppName)
+        {
+            return MakeUniqueValue(
+                project.PhoneApps.Select(app => app.AppName),
+                baseAppName,
+                suffixFormatter: index => $"{baseAppName}_{index}");
+        }
+
+        private static string MakeUniquePhoneCallClassName(QuestProject project, string baseClassName)
+        {
+            return MakeUniqueValue(
+                project.PhoneCalls.Select(call => call.ClassName),
+                baseClassName,
+                suffixFormatter: index => $"{baseClassName}{index}");
+        }
+
+        private static string MakeUniquePhoneCallId(QuestProject project, string baseCallId)
+        {
+            return MakeUniqueValue(
+                project.PhoneCalls.Select(call => call.CallId),
+                baseCallId,
+                suffixFormatter: index => $"{baseCallId}_{index}");
+        }
+
+        private static string MakeUniqueValue(IEnumerable<string> existingValues, string baseValue, Func<int, string> suffixFormatter)
+        {
+            var candidate = string.IsNullOrWhiteSpace(baseValue) ? "generated_phone_app" : baseValue.Trim();
+            var usedValues = new HashSet<string>(existingValues.Where(value => !string.IsNullOrWhiteSpace(value)), StringComparer.OrdinalIgnoreCase);
+            if (!usedValues.Contains(candidate))
+            {
+                return candidate;
+            }
+
+            var index = 2;
+            while (usedValues.Contains(suffixFormatter(index)))
+            {
+                index++;
+            }
+
+            return suffixFormatter(index);
         }
 
         /// <summary>
@@ -373,6 +506,7 @@ namespace Schedule1ModdingTool.Services
                              project.Quests.Any(q => q.FolderId == folder.Id) ||
                              project.Npcs.Any(n => n.FolderId == folder.Id) ||
                              project.Items.Any(i => i.FolderId == folder.Id) ||
+                             project.PhoneCalls.Any(call => call.FolderId == folder.Id) ||
                              project.PhoneApps.Any(app => app.FolderId == folder.Id);
 
             if (hasChildren)
@@ -403,6 +537,10 @@ namespace Schedule1ModdingTool.Services
                 foreach (var item in project.Items.Where(i => i.FolderId == folder.Id))
                 {
                     item.FolderId = parentId;
+                }
+                foreach (var phoneCall in project.PhoneCalls.Where(call => call.FolderId == folder.Id))
+                {
+                    phoneCall.FolderId = parentId;
                 }
                 foreach (var phoneApp in project.PhoneApps.Where(app => app.FolderId == folder.Id))
                 {
@@ -542,6 +680,34 @@ namespace Schedule1ModdingTool.Services
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"[ElementManagementService] Failed to delete phone app file: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Deletes the generated C# file for a phone call.
+        /// </summary>
+        private void DeleteGeneratedPhoneCallFile(QuestProject project, PhoneCallBlueprint phoneCall)
+        {
+            if (project == null || phoneCall == null) return;
+            if (string.IsNullOrWhiteSpace(project.FilePath)) return;
+
+            try
+            {
+                var projectDir = Path.GetDirectoryName(project.FilePath);
+                if (string.IsNullOrWhiteSpace(projectDir) || !Directory.Exists(projectDir))
+                    return;
+
+                var className = MakeSafeIdentifier(phoneCall.ClassName, "GeneratedPhoneCall");
+                var phoneCallFilePath = Path.Combine(projectDir, "PhoneCalls", $"{className}.cs");
+
+                if (File.Exists(phoneCallFilePath))
+                {
+                    File.Delete(phoneCallFilePath);
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[ElementManagementService] Failed to delete phone call file: {ex.Message}");
             }
         }
 

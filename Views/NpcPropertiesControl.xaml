@@ -755,7 +755,8 @@
                                         <views:InfoIcon TooltipText="Product properties this customer prefers"/>
                                     </StackPanel>
 
-                                    <ListBox ItemsSource="{Binding SelectedNpc.CustomerDefaults.PreferredProperties}"
+                                    <ListBox x:Name="PreferredPropertiesListBox"
+                                             ItemsSource="{Binding SelectedNpc.CustomerDefaults.PreferredProperties}"
                                              Height="120"
                                              Background="{StaticResource DarkBackgroundBrush}"
                                              Foreground="{StaticResource LightTextBrush}"

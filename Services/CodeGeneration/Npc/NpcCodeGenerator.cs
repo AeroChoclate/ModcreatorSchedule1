@@ -518,74 +518,95 @@ namespace Schedule1ModdingTool.Services.CodeGeneration.Npc
 
             if (npc.EnableCustomer)
             {
-                builder.OpenBlock("Customer.OnUnlocked += () =>");
-                foreach (var reaction in npc.EventReactions.Where(reaction => reaction.EventType == NpcRuntimeEventType.CustomerUnlocked))
-                    AppendGeneratedActionInvocation(builder, reaction);
-                builder.AppendLine("OnCustomerUnlockedGenerated();");
-                builder.CloseBlock();
-                builder.AppendLine(";");
-                builder.AppendLine();
+                AppendGeneratedRuntimeEventSubscription(
+                    builder,
+                    npc,
+                    NpcRuntimeEventType.CustomerUnlocked,
+                    "Customer.OnUnlocked",
+                    "()",
+                    "OnCustomerUnlockedGenerated()");
 
-                builder.OpenBlock("Customer.OnDealCompleted += () =>");
-                foreach (var reaction in npc.EventReactions.Where(reaction => reaction.EventType == NpcRuntimeEventType.CustomerDealCompleted))
-                    AppendGeneratedActionInvocation(builder, reaction);
-                builder.AppendLine("OnCustomerDealCompletedGenerated();");
-                builder.CloseBlock();
-                builder.AppendLine(";");
-                builder.AppendLine();
+                AppendGeneratedRuntimeEventSubscription(
+                    builder,
+                    npc,
+                    NpcRuntimeEventType.CustomerDealCompleted,
+                    "Customer.OnDealCompleted",
+                    "()",
+                    "OnCustomerDealCompletedGenerated()");
 
-                builder.OpenBlock("Customer.OnContractAssigned += (payment, quantity, startTime, endTime) =>");
-                foreach (var reaction in npc.EventReactions.Where(reaction => reaction.EventType == NpcRuntimeEventType.CustomerContractAssigned))
-                    AppendGeneratedActionInvocation(builder, reaction);
-                builder.AppendLine("OnCustomerContractAssignedGenerated(payment, quantity, startTime, endTime);");
-                builder.CloseBlock();
-                builder.AppendLine(";");
-                builder.AppendLine();
+                AppendGeneratedRuntimeEventSubscription(
+                    builder,
+                    npc,
+                    NpcRuntimeEventType.CustomerContractAssigned,
+                    "Customer.OnContractAssigned",
+                    "(payment, quantity, startTime, endTime)",
+                    "OnCustomerContractAssignedGenerated(payment, quantity, startTime, endTime)");
             }
 
             if (npc.IsDealer)
             {
-                builder.OpenBlock("Dealer.OnRecruited += () =>");
-                foreach (var reaction in npc.EventReactions.Where(reaction => reaction.EventType == NpcRuntimeEventType.DealerRecruited))
-                    AppendGeneratedActionInvocation(builder, reaction);
-                builder.AppendLine("OnDealerRecruitedGenerated();");
-                builder.CloseBlock();
-                builder.AppendLine(";");
-                builder.AppendLine();
+                AppendGeneratedRuntimeEventSubscription(
+                    builder,
+                    npc,
+                    NpcRuntimeEventType.DealerRecruited,
+                    "Dealer.OnRecruited",
+                    "()",
+                    "OnDealerRecruitedGenerated()");
 
-                builder.OpenBlock("Dealer.OnContractAccepted += () =>");
-                foreach (var reaction in npc.EventReactions.Where(reaction => reaction.EventType == NpcRuntimeEventType.DealerContractAccepted))
-                    AppendGeneratedActionInvocation(builder, reaction);
-                builder.AppendLine("OnDealerContractAcceptedGenerated();");
-                builder.CloseBlock();
-                builder.AppendLine(";");
-                builder.AppendLine();
+                AppendGeneratedRuntimeEventSubscription(
+                    builder,
+                    npc,
+                    NpcRuntimeEventType.DealerContractAccepted,
+                    "Dealer.OnContractAccepted",
+                    "()",
+                    "OnDealerContractAcceptedGenerated()");
 
-                builder.OpenBlock("Dealer.OnRecommended += () =>");
-                foreach (var reaction in npc.EventReactions.Where(reaction => reaction.EventType == NpcRuntimeEventType.DealerRecommended))
-                    AppendGeneratedActionInvocation(builder, reaction);
-                builder.AppendLine("OnDealerRecommendedGenerated();");
-                builder.CloseBlock();
-                builder.AppendLine(";");
-                builder.AppendLine();
+                AppendGeneratedRuntimeEventSubscription(
+                    builder,
+                    npc,
+                    NpcRuntimeEventType.DealerRecommended,
+                    "Dealer.OnRecommended",
+                    "()",
+                    "OnDealerRecommendedGenerated()");
             }
 
-            builder.OpenBlock("Relationship.OnChanged += delta =>");
-            foreach (var reaction in npc.EventReactions.Where(reaction => reaction.EventType == NpcRuntimeEventType.RelationshipChanged))
-                AppendGeneratedActionInvocation(builder, reaction);
-            builder.AppendLine("OnRelationshipChangedGenerated(delta);");
+            AppendGeneratedRuntimeEventSubscription(
+                builder,
+                npc,
+                NpcRuntimeEventType.RelationshipChanged,
+                "Relationship.OnChanged",
+                "delta",
+                "OnRelationshipChangedGenerated(delta)");
+
+            AppendGeneratedRuntimeEventSubscription(
+                builder,
+                npc,
+                NpcRuntimeEventType.RelationshipUnlocked,
+                "Relationship.OnUnlocked",
+                "(unlockType, alreadyUnlocked)",
+                "OnRelationshipUnlockedGenerated(unlockType, alreadyUnlocked)");
+
             builder.CloseBlock();
-            builder.AppendLine(";");
             builder.AppendLine();
+        }
 
-            builder.OpenBlock("Relationship.OnUnlocked += (unlockType, alreadyUnlocked) =>");
-            foreach (var reaction in npc.EventReactions.Where(reaction => reaction.EventType == NpcRuntimeEventType.RelationshipUnlocked))
+        private void AppendGeneratedRuntimeEventSubscription(
+            ICodeBuilder builder,
+            NpcBlueprint npc,
+            NpcRuntimeEventType eventType,
+            string eventPath,
+            string lambdaSignature,
+            string generatedHookCall)
+        {
+            builder.OpenBlock($"{eventPath} += {lambdaSignature} =>");
+            foreach (var reaction in npc.EventReactions.Where(reaction => reaction.EventType == eventType))
+            {
                 AppendGeneratedActionInvocation(builder, reaction);
-            builder.AppendLine("OnRelationshipUnlockedGenerated(unlockType, alreadyUnlocked);");
+            }
+
+            builder.AppendLine($"{generatedHookCall};");
             builder.CloseBlock();
             builder.AppendLine(";");
-
-            builder.CloseBlock();
             builder.AppendLine();
         }
 
