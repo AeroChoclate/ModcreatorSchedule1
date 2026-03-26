@@ -108,11 +108,7 @@ namespace Schedule1ModdingTool.Views
                 ? AppearancePresets.FaceLayers[0].Path
                 : "Avatar/Layers/Face/Face_Neutral";
 
-            CurrentNpc?.Appearance.FaceLayers.Add(new NpcAppearanceLayer
-            {
-                LayerPath = defaultPath,
-                ColorHex = "#FFFFFFFF"
-            });
+            AddAppearanceLayer(CurrentNpc?.Appearance.FaceLayers, defaultPath);
         }
 
         private void AddBodyLayer_Click(object sender, RoutedEventArgs e)
@@ -121,11 +117,7 @@ namespace Schedule1ModdingTool.Views
                 ? AppearancePresets.BodyLayers[0].Path
                 : "Avatar/Layers/Top/T-Shirt";
 
-            CurrentNpc?.Appearance.BodyLayers.Add(new NpcAppearanceLayer
-            {
-                LayerPath = defaultPath,
-                ColorHex = "#FFFFFFFF"
-            });
+            AddAppearanceLayer(CurrentNpc?.Appearance.BodyLayers, defaultPath);
         }
 
         private void AddAccessoryLayer_Click(object sender, RoutedEventArgs e)
@@ -134,35 +126,22 @@ namespace Schedule1ModdingTool.Views
                 ? AppearancePresets.AccessoryLayers[0].Path
                 : "Avatar/Accessories/Feet/Sneakers/Sneakers";
 
-            CurrentNpc?.Appearance.AccessoryLayers.Add(new NpcAppearanceLayer
-            {
-                LayerPath = defaultPath,
-                ColorHex = "#FFFFFFFF"
-            });
+            AddAppearanceLayer(CurrentNpc?.Appearance.AccessoryLayers, defaultPath);
         }
 
         private void RemoveFaceLayer_Click(object sender, RoutedEventArgs e)
         {
-            if (sender is Button btn && btn.Tag is NpcAppearanceLayer layer)
-            {
-                CurrentNpc?.Appearance.FaceLayers.Remove(layer);
-            }
+            RemoveAppearanceLayer(sender, CurrentNpc?.Appearance.FaceLayers);
         }
 
         private void RemoveBodyLayer_Click(object sender, RoutedEventArgs e)
         {
-            if (sender is Button btn && btn.Tag is NpcAppearanceLayer layer)
-            {
-                CurrentNpc?.Appearance.BodyLayers.Remove(layer);
-            }
+            RemoveAppearanceLayer(sender, CurrentNpc?.Appearance.BodyLayers);
         }
 
         private void RemoveAccessoryLayer_Click(object sender, RoutedEventArgs e)
         {
-            if (sender is Button btn && btn.Tag is NpcAppearanceLayer layer)
-            {
-                CurrentNpc?.Appearance.AccessoryLayers.Remove(layer);
-            }
+            RemoveAppearanceLayer(sender, CurrentNpc?.Appearance.AccessoryLayers);
         }
 
         private static string? PickColor(string currentHex)
@@ -413,10 +392,10 @@ namespace Schedule1ModdingTool.Views
 
         private void RemoveDialogueDatabaseEntry_Click(object sender, RoutedEventArgs e)
         {
-            if (CurrentNpc == null || sender is not Button button || button.Tag is not NpcDialogueDatabaseEntryBlueprint entry)
+            if (CurrentNpc == null)
                 return;
 
-            CurrentNpc.DialogueDatabaseEntries.Remove(entry);
+            RemoveTaggedItem(sender, CurrentNpc.DialogueDatabaseEntries);
         }
 
         private void AddDialogueContainer_Click(object sender, RoutedEventArgs e)
@@ -437,10 +416,10 @@ namespace Schedule1ModdingTool.Views
 
         private void RemoveDialogueContainer_Click(object sender, RoutedEventArgs e)
         {
-            if (CurrentNpc == null || sender is not Button button || button.Tag is not NpcDialogueContainerBlueprint container)
+            if (CurrentNpc == null)
                 return;
 
-            CurrentNpc.DialogueContainers.Remove(container);
+            RemoveTaggedItem(sender, CurrentNpc.DialogueContainers);
         }
 
         private void AddDialogueNode_Click(object sender, RoutedEventArgs e)
@@ -457,17 +436,10 @@ namespace Schedule1ModdingTool.Views
 
         private void RemoveDialogueNode_Click(object sender, RoutedEventArgs e)
         {
-            if (CurrentNpc == null || sender is not Button button || button.Tag is not NpcDialogueNodeBlueprint node)
+            if (CurrentNpc == null || !TryGetButtonTag<NpcDialogueNodeBlueprint>(sender, out var node))
                 return;
 
-            foreach (var container in CurrentNpc.DialogueContainers)
-            {
-                if (!container.Nodes.Contains(node))
-                    continue;
-
-                container.Nodes.Remove(node);
-                break;
-            }
+            RemoveDialogueNode(node);
         }
 
         private void AddDialogueChoice_Click(object sender, RoutedEventArgs e)
@@ -483,20 +455,10 @@ namespace Schedule1ModdingTool.Views
 
         private void RemoveDialogueChoice_Click(object sender, RoutedEventArgs e)
         {
-            if (CurrentNpc == null || sender is not Button button || button.Tag is not NpcDialogueChoiceBlueprint choice)
+            if (CurrentNpc == null || !TryGetButtonTag<NpcDialogueChoiceBlueprint>(sender, out var choice))
                 return;
 
-            foreach (var container in CurrentNpc.DialogueContainers)
-            {
-                foreach (var node in container.Nodes)
-                {
-                    if (!node.Choices.Contains(choice))
-                        continue;
-
-                    node.Choices.Remove(choice);
-                    return;
-                }
-            }
+            RemoveDialogueChoice(choice);
         }
 
         private void AddDialogueCallback_Click(object sender, RoutedEventArgs e)
@@ -506,10 +468,10 @@ namespace Schedule1ModdingTool.Views
 
         private void RemoveDialogueCallback_Click(object sender, RoutedEventArgs e)
         {
-            if (CurrentNpc == null || sender is not Button button || button.Tag is not NpcDialogueCallbackBlueprint callback)
+            if (CurrentNpc == null)
                 return;
 
-            CurrentNpc.DialogueCallbacks.Remove(callback);
+            RemoveTaggedItem(sender, CurrentNpc.DialogueCallbacks);
         }
 
         private void AddDialogueInjection_Click(object sender, RoutedEventArgs e)
@@ -525,10 +487,10 @@ namespace Schedule1ModdingTool.Views
 
         private void RemoveDialogueInjection_Click(object sender, RoutedEventArgs e)
         {
-            if (CurrentNpc == null || sender is not Button button || button.Tag is not NpcDialogueInjectionBlueprint injection)
+            if (CurrentNpc == null)
                 return;
 
-            CurrentNpc.DialogueInjections.Remove(injection);
+            RemoveTaggedItem(sender, CurrentNpc.DialogueInjections);
         }
 
         private void AddEventReaction_Click(object sender, RoutedEventArgs e)
@@ -538,10 +500,10 @@ namespace Schedule1ModdingTool.Views
 
         private void RemoveEventReaction_Click(object sender, RoutedEventArgs e)
         {
-            if (CurrentNpc == null || sender is not Button button || button.Tag is not NpcRuntimeEventReactionBlueprint reaction)
+            if (CurrentNpc == null)
                 return;
 
-            CurrentNpc.EventReactions.Remove(reaction);
+            RemoveTaggedItem(sender, CurrentNpc.EventReactions);
         }
 
         // Customer Settings Handlers
@@ -562,15 +524,10 @@ namespace Schedule1ModdingTool.Views
 
         private void RemovePreferredProperty_Click(object sender, RoutedEventArgs e)
         {
-            if (CurrentNpc == null)
+            if (CurrentNpc == null || PreferredPropertiesListBox?.SelectedItem is not string selectedProperty)
                 return;
 
-            // Find the ListBox by walking the visual tree or by name
-            var listBox = FindListBoxInVisualTree("PreferredProperties");
-            if (listBox?.SelectedItem is string selectedProperty)
-            {
-                CurrentNpc.CustomerDefaults.PreferredProperties.Remove(selectedProperty);
-            }
+            CurrentNpc.CustomerDefaults.PreferredProperties.Remove(selectedProperty);
         }
 
         // Inventory Defaults Handlers
@@ -601,14 +558,6 @@ namespace Schedule1ModdingTool.Views
             {
                 CurrentNpc.InventoryDefaults.StartupItems.Remove(selectedItem);
             }
-        }
-
-        // Helper method to find ListBox in visual tree
-        private System.Windows.Controls.ListBox? FindListBoxInVisualTree(string partialName)
-        {
-            // This is a simplified approach - in a real app you might want to use VisualTreeHelper
-            // For now, we'll rely on the ListBox selection being available through data context
-            return null; // Placeholder - WPF binding will handle selection automatically
         }
 
         private void NpcEditorTabControl_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -667,6 +616,79 @@ namespace Schedule1ModdingTool.Views
             {
                 AppUtils.ShowError($"Error requesting player position: {ex.Message}");
             }
+        }
+
+        private static void AddAppearanceLayer(ObservableCollection<NpcAppearanceLayer>? collection, string defaultPath)
+        {
+            if (collection == null)
+                return;
+
+            collection.Add(new NpcAppearanceLayer
+            {
+                LayerPath = defaultPath,
+                ColorHex = "#FFFFFFFF"
+            });
+        }
+
+        private static void RemoveAppearanceLayer(object sender, ICollection<NpcAppearanceLayer>? collection)
+        {
+            if (collection == null || !TryGetButtonTag<NpcAppearanceLayer>(sender, out var layer))
+                return;
+
+            collection.Remove(layer);
+        }
+
+        private static void RemoveTaggedItem<T>(object sender, ICollection<T> collection)
+            where T : class
+        {
+            if (collection == null || !TryGetButtonTag<T>(sender, out var value))
+                return;
+
+            collection.Remove(value);
+        }
+
+        private void RemoveDialogueNode(NpcDialogueNodeBlueprint node)
+        {
+            if (CurrentNpc == null)
+                return;
+
+            foreach (var container in CurrentNpc.DialogueContainers)
+            {
+                if (!container.Nodes.Contains(node))
+                    continue;
+
+                container.Nodes.Remove(node);
+                return;
+            }
+        }
+
+        private void RemoveDialogueChoice(NpcDialogueChoiceBlueprint choice)
+        {
+            if (CurrentNpc == null)
+                return;
+
+            foreach (var container in CurrentNpc.DialogueContainers)
+            {
+                foreach (var node in container.Nodes)
+                {
+                    if (!node.Choices.Contains(choice))
+                        continue;
+
+                    node.Choices.Remove(choice);
+                    return;
+                }
+            }
+        }
+
+        private static bool TryGetButtonTag<T>(object sender, out T value)
+            where T : class
+        {
+            value = null!;
+            if (sender is not Button button || button.Tag is not T tag)
+                return false;
+
+            value = tag;
+            return true;
         }
     }
 }

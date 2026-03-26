@@ -109,21 +109,11 @@ namespace Schedule1ModdingTool.Views
                 return;
 
             var result = _clothingStudioService.GenerateClothingTemplate(project, projectDirectory, item);
-            if (!result.Success)
-            {
-                AppUtils.ShowError(result.Message, "Clothing Studio");
+            if (!TryGetSuccessfulStudioAssetResult(result, "Clothing Studio", out var asset))
                 return;
-            }
 
-            if (!string.IsNullOrWhiteSpace(result.RecommendedClothingAssetPath))
-            {
-                item.ClothingAssetPath = result.RecommendedClothingAssetPath;
-            }
-
-            if (result.PrimaryAsset != null)
-            {
-                ApplyTextureStudioAsset(viewModel, item, result.PrimaryAsset);
-            }
+            ApplyRecommendedClothingAssetPath(item, result.RecommendedClothingAssetPath);
+            ApplyTextureStudioAsset(viewModel, item, asset);
 
             AppUtils.ShowInfo($"{result.Message}\n\nClothing Asset Path set to:\n{item.ClothingAssetPath}", "Clothing Studio");
         }
@@ -134,16 +124,10 @@ namespace Schedule1ModdingTool.Views
                 return;
 
             var result = _clothingStudioService.GenerateIconTemplate(project, projectDirectory, item);
-            if (!result.Success)
-            {
-                AppUtils.ShowError(result.Message, "Clothing Studio");
+            if (!TryGetSuccessfulStudioAssetResult(result, "Clothing Studio", out var asset))
                 return;
-            }
 
-            if (result.PrimaryAsset != null)
-            {
-                ApplyIconStudioAsset(viewModel, item, result.PrimaryAsset);
-            }
+            ApplyIconStudioAsset(viewModel, item, asset);
 
             AppUtils.ShowInfo($"{result.Message}\n\nIcon Resource set to:\n{item.IconFileName}", "Clothing Studio");
         }
@@ -160,21 +144,11 @@ namespace Schedule1ModdingTool.Views
             }
 
             var result = _clothingStudioService.GenerateAccessoryStarterPack(project, projectDirectory, item);
-            if (!result.Success)
-            {
-                AppUtils.ShowError(result.Message, "Clothing Studio");
+            if (!TryGetSuccessfulStudioAssetResult(result, "Clothing Studio", out var asset))
                 return;
-            }
 
-            if (!string.IsNullOrWhiteSpace(result.RecommendedClothingAssetPath))
-            {
-                item.ClothingAssetPath = result.RecommendedClothingAssetPath;
-            }
-
-            if (result.PrimaryAsset != null)
-            {
-                ApplyTextureStudioAsset(viewModel, item, result.PrimaryAsset);
-            }
+            ApplyRecommendedClothingAssetPath(item, result.RecommendedClothingAssetPath);
+            ApplyTextureStudioAsset(viewModel, item, asset);
 
             AppUtils.ShowInfo($"{result.Message}\n\nClothing Asset Path set to:\n{item.ClothingAssetPath}", "Clothing Studio");
         }
@@ -215,16 +189,8 @@ namespace Schedule1ModdingTool.Views
 
         private void UseStudioResourceForTexture_Click(object sender, RoutedEventArgs e)
         {
-            var item = SelectedItem;
-            var asset = SelectedStudioResource;
-            if (item == null || asset == null)
+            if (!TryGetSelectedStudioPng("Texture resources must be PNG files.", out var item, out var asset))
                 return;
-
-            if (!IsPngResource(asset))
-            {
-                AppUtils.ShowWarning("Texture resources must be PNG files.", "Clothing Studio");
-                return;
-            }
 
             item.ClothingTextureResourcePath = asset.RelativePath.Replace('\\', '/');
             ApplyTexturePathDefaults(item, item.ClothingTextureSourceAssetPath);
@@ -232,16 +198,8 @@ namespace Schedule1ModdingTool.Views
 
         private void UseStudioResourceForIcon_Click(object sender, RoutedEventArgs e)
         {
-            var item = SelectedItem;
-            var asset = SelectedStudioResource;
-            if (item == null || asset == null)
+            if (!TryGetSelectedStudioPng("Icon resources must be PNG files.", out var item, out var asset))
                 return;
-
-            if (!IsPngResource(asset))
-            {
-                AppUtils.ShowWarning("Icon resources must be PNG files.", "Clothing Studio");
-                return;
-            }
 
             item.IconFileName = asset.RelativePath.Replace('\\', '/');
         }
@@ -445,17 +403,16 @@ namespace Schedule1ModdingTool.Views
                     $"{item.DisplayName} {selectedTexture.TextureName}",
                     $"Extracted from Schedule I data file '{selectedTexture.AssetFileRelativePath}'.");
 
-                if (!importResult.Success || importResult.PrimaryAsset == null)
+                if (!TryGetSuccessfulStudioAssetResult(importResult, "Game Data Extractor", out var asset))
                 {
                     SetGameDataTextureStatus(importResult.Message);
-                    AppUtils.ShowError(importResult.Message, "Game Data Extractor");
                     return;
                 }
 
                 ApplyTextureStudioAsset(
                     viewModel,
                     item,
-                    importResult.PrimaryAsset,
+                    asset,
                     extractedTexture.PngBytes,
                     $"{selectedTexture.TextureName} ({extractedTexture.Width}x{extractedTexture.Height})");
 
@@ -518,18 +475,15 @@ namespace Schedule1ModdingTool.Views
                 $"{item.DisplayName} Source Texture",
                 $"Imported from running game asset '{sourceAssetPath}'.");
 
-            if (!result.Success || result.PrimaryAsset == null)
-            {
-                AppUtils.ShowError(result.Message, "Texture Lab");
+            if (!TryGetSuccessfulStudioAssetResult(result, "Texture Lab", out var asset))
                 return;
-            }
 
             ApplyTextureStudioAsset(
                 viewModel,
                 item,
-                result.PrimaryAsset,
+                asset,
                 pngBytes,
-                $"{result.PrimaryAsset.DisplayName} ({response.Width}x{response.Height})",
+                $"{asset.DisplayName} ({response.Width}x{response.Height})",
                 sourceAssetPath,
                 response.ResolvedShaderProperty);
 
@@ -557,8 +511,7 @@ namespace Schedule1ModdingTool.Views
             if (string.IsNullOrWhiteSpace(targetRelativePath))
                 return;
 
-            var pngBytes = RenderTextureEditorToPng();
-            if (pngBytes == null)
+            if (!TryRenderTextureEditorPng(out var pngBytes))
                 return;
 
             var result = _clothingStudioService.SaveTexturePng(
@@ -569,14 +522,11 @@ namespace Schedule1ModdingTool.Views
                 Path.GetFileNameWithoutExtension(targetRelativePath),
                 "Edited in Clothing Studio.");
 
-            if (!result.Success || result.PrimaryAsset == null)
-            {
-                AppUtils.ShowError(result.Message, "Texture Lab");
+            if (!TryGetSuccessfulStudioAssetResult(result, "Texture Lab", out var asset))
                 return;
-            }
 
-            ApplyTextureStudioAsset(viewModel, item, result.PrimaryAsset, pngBytes, result.PrimaryAsset.DisplayName);
-            SetTextureEditorStatus($"Saved over {result.PrimaryAsset.RelativePath}");
+            ApplyTextureStudioAsset(viewModel, item, asset, pngBytes, asset.DisplayName);
+            SetTextureEditorStatus($"Saved over {asset.RelativePath}");
         }
 
         private void SaveTextureAsNewResource_Click(object sender, RoutedEventArgs e)
@@ -584,8 +534,7 @@ namespace Schedule1ModdingTool.Views
             if (!TryGetStudioItemContext(out var viewModel, out var project, out var item, out var projectDirectory))
                 return;
 
-            var pngBytes = RenderTextureEditorToPng();
-            if (pngBytes == null)
+            if (!TryRenderTextureEditorPng(out var pngBytes))
                 return;
 
             var result = _clothingStudioService.ImportTexturePng(
@@ -597,14 +546,11 @@ namespace Schedule1ModdingTool.Views
                 $"{item.DisplayName} Edited Texture",
                 "Edited in Clothing Studio.");
 
-            if (!result.Success || result.PrimaryAsset == null)
-            {
-                AppUtils.ShowError(result.Message, "Texture Lab");
+            if (!TryGetSuccessfulStudioAssetResult(result, "Texture Lab", out var asset))
                 return;
-            }
 
-            ApplyTextureStudioAsset(viewModel, item, result.PrimaryAsset, pngBytes, result.PrimaryAsset.DisplayName);
-            SetTextureEditorStatus($"Saved as {result.PrimaryAsset.RelativePath}");
+            ApplyTextureStudioAsset(viewModel, item, asset, pngBytes, asset.DisplayName);
+            SetTextureEditorStatus($"Saved as {asset.RelativePath}");
         }
 
         private void ClearTextureEditor_Click(object sender, RoutedEventArgs e)
@@ -814,6 +760,68 @@ namespace Schedule1ModdingTool.Views
 
             project = viewModel.CurrentProject;
             item = SelectedItem;
+            return true;
+        }
+
+        private bool TryGetSelectedStudioPng(string warningMessage, out ItemBlueprint item, out ResourceAsset asset)
+        {
+            item = null!;
+            asset = null!;
+
+            if (SelectedItem == null || SelectedStudioResource == null)
+                return false;
+
+            if (!IsPngResource(SelectedStudioResource))
+            {
+                AppUtils.ShowWarning(warningMessage, "Clothing Studio");
+                return false;
+            }
+
+            item = SelectedItem;
+            asset = SelectedStudioResource;
+            return true;
+        }
+
+        private bool TryGetSuccessfulStudioAssetResult(
+            ClothingStudioService.StudioGenerationResult result,
+            string dialogTitle,
+            out ResourceAsset asset)
+        {
+            asset = null!;
+            if (!result.Success)
+            {
+                AppUtils.ShowError(result.Message, dialogTitle);
+                return false;
+            }
+
+            if (result.PrimaryAsset == null)
+            {
+                AppUtils.ShowError("The operation completed without producing a resource asset.", dialogTitle);
+                return false;
+            }
+
+            asset = result.PrimaryAsset;
+            return true;
+        }
+
+        private static void ApplyRecommendedClothingAssetPath(ItemBlueprint item, string? recommendedPath)
+        {
+            if (!string.IsNullOrWhiteSpace(recommendedPath))
+            {
+                item.ClothingAssetPath = recommendedPath;
+            }
+        }
+
+        private bool TryRenderTextureEditorPng(out byte[] pngBytes)
+        {
+            pngBytes = Array.Empty<byte>();
+            var renderedBytes = RenderTextureEditorToPng();
+            if (renderedBytes == null)
+            {
+                return false;
+            }
+
+            pngBytes = renderedBytes;
             return true;
         }
 
